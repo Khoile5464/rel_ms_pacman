@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cài đặt · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="getting-started/installation.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Bắt đầu</div>
+<h1>Cài đặt</h1>
+<p class="lead">Cài đúng thứ tự: môi trường Python, torch bản CUDA, rồi pacman_rl. Làm xong thì chạy ba lệnh kiểm tra ở cuối trang để chắc mọi thứ ổn.</p>
+
+<h2 id="requirements">Yêu cầu</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Thành phần</th><th>Yêu cầu</th><th>Ghi chú</th></tr></thead>
+<tbody>
+<tr><td>Python</td><td>3.10 trở lên</td><td>Khai báo ở <code>requires-python</code> trong <code>pyproject.toml</code>. Dự án được phát triển và thử trên Python 3.10.</td></tr>
+<tr><td>GPU</td><td>NVIDIA có CUDA (khuyên dùng)</td><td>Không có GPU vẫn chạy được, nhưng chậm hơn nhiều. <code>get_device()</code> tự chọn <code>cuda</code> nếu có, không thì <code>cpu</code>.</td></tr>
+<tr><td>CPU</td><td>Càng nhiều nhân càng tốt</td><td>Mặc định mở 16 process env. Ít nhân thì giảm <code>n_envs</code> (xem <a href="../guides/training.html#sizing">chọn cỡ theo máy</a>).</td></tr>
+<tr><td>RAM</td><td>Tối thiểu khoảng 8 GB, khuyên 16 GB</td><td>DQN với <code>buffer_size</code> mặc định (200,000) cần khoảng 1.4 GB cho buffer, chưa kể 16 process env.</td></tr>
+<tr><td>Hệ điều hành</td><td>Windows (đã dùng thực tế)</td><td>Code không dùng API riêng của Windows nên Linux/macOS về nguyên tắc chạy được, nhưng chưa được kiểm tra trên đó.</td></tr>
+</tbody></table></div>
+
+<h2 id="deps">Thư viện phụ thuộc</h2>
+<p>Khai báo trong <code>pyproject.toml</code>, <code>pip</code> sẽ tự cài:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Gói</th><th>Phiên bản</th><th>Vai trò</th></tr></thead>
+<tbody>
+<tr><td><code>numpy</code></td><td>&lt; 2</td><td>Mảng, replay buffer. Ghim dưới 2 để khớp với gymnasium 0.29 và torch 2.3.</td></tr>
+<tr><td><code>gymnasium</code></td><td>== 0.29.1</td><td>API env, vector env, wrapper. Ghim cứng vì pacman_rl dùng <code>gym.wrappers.FrameStack</code> và <code>AtariPreprocessing</code> của bản này.</td></tr>
+<tr><td><code>ale-py</code></td><td>&ge; 0.9, &lt; 0.11</td><td>Emulator Atari, đã kèm sẵn ROM Ms. Pacman.</td></tr>
+<tr><td><code>opencv-python</code></td><td>bất kỳ</td><td>Resize và chuyển xám khung hình xuống 84x84.</td></tr>
+<tr><td><code>matplotlib</code></td><td>bất kỳ</td><td>Vẽ biểu đồ.</td></tr>
+<tr><td><code>pytest</code></td><td>tùy chọn (<code>[dev]</code>)</td><td>Chạy test.</td></tr>
+</tbody></table></div>
+
+<div class="callout warn">
+<p class="callout-title">torch không nằm trong danh sách trên</p>
+<p>Cố ý. Nếu để <code>pip</code> tự kéo torch, nó sẽ cài bản CPU và đè lên bản CUDA bạn đã cài. Hãy cài torch bản CUDA <strong>trước</strong>, rồi mới cài pacman_rl.</p>
+</div>
+
+<h2 id="steps">Các bước cài</h2>
+<ol class="steps">
+<li><h4>Tạo môi trường Python</h4>
+<p>Dùng conda (như dự án đang dùng) hoặc <code>venv</code> đều được.</p>
+<div class="tabs">
+<div class="tab" data-title="conda">
+<pre><code class="language-bash">conda create -n rel_pacman python=3.10
+conda activate rel_pacman
+</code></pre></div>
+<div class="tab" data-title="venv (Windows)">
+<pre><code class="language-powershell">python -m venv .venv
+.venv\Scripts\activate
+</code></pre></div>
+<div class="tab" data-title="venv (Linux/macOS)">
+<pre><code class="language-bash">python3 -m venv .venv
+source .venv/bin/activate
+</code></pre></div>
+</div></li>
+
+<li><h4>Cài torch bản CUDA</h4>
+<p>Bản dự án đang dùng là torch 2.3.1 với CUDA 12.1:</p>
+<pre><code class="language-bash">pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+</code></pre>
+<p>Máy không có GPU NVIDIA thì cài bản CPU: <code>pip install torch==2.3.1</code>.</p></li>
+
+<li><h4>Cài pacman_rl</h4>
+<p>Chạy từ thư mục <code>rel_ms_pacman/</code> (thư mục chứa <code>pacman_rl/</code>):</p>
+<pre><code class="language-bash">pip install -e pacman_rl
+</code></pre>
+<p>Cờ <code>-e</code> (editable) nghĩa là sửa code trong <code>src/</code> có hiệu lực ngay, không cần cài lại. Muốn chạy test thì cài kèm <code>pytest</code>: <code>pip install -e "pacman_rl[dev]"</code>.</p>
+<div class="callout tip">
+<p class="callout-title">Môi trường đã có đủ thư viện?</p>
+<p>Thêm <code>--no-deps</code> để pip không đụng tới các gói đã cài: <code>pip install -e pacman_rl --no-deps</code>. Đây là cách README dùng với env <code>rel_pacman</code> có sẵn.</p>
+</div></li>
+</ol>
+
+<h2 id="verify">Kiểm tra cài đặt</h2>
+<p>Chạy lần lượt ba lệnh. Mỗi lệnh kiểm tra một tầng khác nhau.</p>
+
+<h3 id="verify-import">1. Import được thư viện</h3>
+<pre><code class="language-bash">python -c "import pacman_rl; print(pacman_rl.__version__)"
+</code></pre>
+<pre class="plain"><code>0.1.0</code></pre>
+
+<h3 id="verify-device">2. Nhận đúng thiết bị tính toán</h3>
+<pre><code class="language-bash">python -c "from pacman_rl import get_device, describe_device; print(describe_device(get_device()))"
+</code></pre>
+<pre class="plain"><code>cuda | NVIDIA GeForce RTX 3070 Ti Laptop GPU</code></pre>
+<p>Nếu in <code>cpu | CPU</code> trong khi máy có GPU, torch bạn cài là bản CPU. Cài lại theo bước 2.</p>
+
+<h3 id="verify-env">3. Emulator và ROM hoạt động</h3>
+<pre><code class="language-bash">python -c "from pacman_rl.envs import make_env; e = make_env(); obs, _ = e.reset(seed=0); print(obs.shape, obs.dtype)"
+</code></pre>
+<pre class="plain"><code>A.L.E: Arcade Learning Environment (version 0.10.2+c9d4b19)
+[Powered by Stella]
+(4, 84, 84) uint8</code></pre>
+<p>Hai dòng <code>A.L.E ...</code> và <code>[Powered by Stella]</code> là thông báo bình thường của emulator. Khi train với 16 env bạn sẽ thấy chúng lặp lại nhiều lần, mỗi process con in một lần.</p>
+
+<div class="callout note">
+<p class="callout-title">Trên Windows, script riêng cần <code>if __name__ == "__main__"</code></p>
+<p>Env song song dùng <code>multiprocessing</code> kiểu <em>spawn</em>: process con import lại file chính. Nếu bạn viết file <code>.py</code> gọi <code>train_ppo(...)</code>, hãy đặt lệnh gọi trong khối <code>if __name__ == "__main__":</code>, nếu không process con sẽ chạy lại cả script. Dòng lệnh <code>python -m pacman_rl ...</code> và notebook đã được xử lý sẵn. Xem thêm <a href="../troubleshooting.html#windows-main">Xử lý sự cố</a>.</p>
+</div>
+
+<h2 id="entrypoint">Lệnh <code>pacman-rl</code></h2>
+<p>Cài xong còn có lệnh <code>pacman-rl</code> (nằm trong <code>Scripts/</code> của môi trường), tương đương với <code>python -m pacman_rl</code>. Hai dạng sau chạy y hệt nhau:</p>
+<pre><code class="language-bash">pacman-rl train ppo --steps 100000
+python -m pacman_rl train ppo --steps 100000
+</code></pre>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

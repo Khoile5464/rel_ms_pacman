@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup và chạy huấn luyện · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="guides/training.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Hướng dẫn</div>
+<h1>Setup và chạy huấn luyện</h1>
+<p class="lead">Từ lúc quyết định train đến lúc có file kết quả: chọn cách chạy, chỉnh cấu hình cho vừa máy, theo dõi, dừng giữa chừng, train tiếp và chạy nhiều seed để so sánh.</p>
+
+<h2 id="choose">Chọn cách chạy</h2>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Dòng lệnh</th><th>Python / notebook</th></tr></thead>
+<tbody>
+<tr><td>Hợp với</td><td>Chạy dài, chạy nhiều cấu hình, để máy chạy qua đêm</td><td>Thử nghiệm, vẽ và xem ngay, tự viết reward</td></tr>
+<tr><td>Đổi tham số</td><td><code>--set lr=1e-4 c2=0.02</code></td><td><code>PPOConfig(lr=1e-4, c2=0.02)</code></td></tr>
+<tr><td>Tự lưu cả 3 file</td><td>Có, khi train xong hoặc khi Ctrl+C</td><td>Bạn gọi <code>save_run</code></td></tr>
+<tr><td>Tự viết <code>reward_fn</code></td><td>Không (chỉ qua Python)</td><td>Có</td></tr>
+<tr><td>Train tiếp từ model cũ</td><td>Chưa hỗ trợ</td><td>Có, <code>model=...</code></td></tr>
+</tbody></table></div>
+
+<h2 id="before">Trước khi bấm chạy</h2>
+<ul>
+<li><strong>Kiểm tra thiết bị</strong>: <code>python -c "from pacman_rl import *; print(describe_device(get_device()))"</code> phải ra <code>cuda | ...</code> nếu bạn có GPU.</li>
+<li><strong>Đóng bớt ứng dụng nặng</strong>, nhất là khi train DQN: buffer 1.4 GB và 16 process env cạnh tranh RAM. Tốc độ DQN dao động nhiều theo RAM còn trống.</li>
+<li><strong>Chọn cỡ</strong> <code>n_envs</code> theo máy, xem <a href="#sizing">bên dưới</a>.</li>
+<li><strong>Biết mình muốn gì</strong>: hãy chạy trước <a href="../getting-started/quickstart.html">bản ngắn 50,000 bước</a> để chắc pipeline ổn rồi mới bỏ hàng giờ cho bản dài.</li>
+</ul>
+
+<h2 id="cli">Train bằng dòng lệnh</h2>
+<pre><code class="language-bash"># cấu hình mặc định (PPO 2 triệu bước, DQN 10 triệu bước)
+python -m pacman_rl train ppo
+python -m pacman_rl train dqn
+
+# đổi số bước, seed, tên run, thư mục lưu
+python -m pacman_rl train ppo --steps 5000000 --seed 1 --name ppo_s1 --out runs
+
+# ghi đè bất kỳ siêu tham số nào
+python -m pacman_rl train ppo --set lr=1e-4 n_envs=8 n_steps=256 c2=0.02
+</code></pre>
+<p>Khi chạy, lệnh in thiết bị và toàn bộ config đang dùng (trừ <code>reward_fn</code>) lên dòng đầu. <strong>Đọc dòng này để chắc <code>--set</code> đã có hiệu lực.</strong></p>
+<p>Kết quả ghi vào <code>--out</code> (mặc định <code>runs/</code>, tự tạo nếu chưa có), ba file mang tên <code>--name</code> (mặc định <code>ms_pacman_ppo</code> hoặc <code>ms_pacman_dqn</code>):</p>
+<pre class="plain"><code>runs/ms_pacman_ppo.pt             trọng số mạng (state_dict)
+runs/ms_pacman_ppo_episodes.npy   mảng (N, 2): (bước env, điểm thật) của từng ván
+runs/ms_pacman_ppo_log.npy        dict các chỉ số theo thời gian</code></pre>
+<p>Toàn bộ tùy chọn ở <a href="../reference/cli.html">Dòng lệnh (CLI)</a>.</p>
+
+<div class="callout warn">
+<p class="callout-title">Trùng tên sẽ ghi đè</p>
+<p>Train hai lần cùng <code>--name</code> và <code>--out</code> thì lần sau đè lần trước, không hỏi. Khi thử nhiều cấu hình, luôn đặt <code>--name</code> khác nhau (ví dụ <code>ppo_lr1e4_s0</code>).</p>
+</div>
+
+<h2 id="python">Train bằng Python</h2>
+<pre><code class="language-python">from pacman_rl import PPOConfig, train_ppo, save_run, get_device
+
+device = get_device()
+cfg = PPOConfig(total_steps=2_000_000, lr=2.5e-4, seed=0)
+result = train_ppo(cfg, save_path="runs/ppo.pt", device=device)   # TrainResult(model, log, episodes)
+save_run(result, "runs", "ppo")                                    # ghi 3 file
+</code></pre>
+<p><code>train_ppo</code> và <code>train_dqn</code> nhận cùng bộ tham số chạy. Các tham số này <strong>không</strong> nằm trong Config vì chúng không làm thay đổi kết quả học:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Tham số</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>cfg</code></td><td><code>None</code></td><td><code>PPOConfig</code> / <code>DQNConfig</code>. Bỏ trống thì dùng mặc định.</td></tr>
+<tr><td><code>model</code></td><td><code>None</code></td><td>Mạng có sẵn để train tiếp. <code>None</code> thì tạo mới. Xem <a href="#resume">Train tiếp</a>.</td></tr>
+<tr><td><code>save_path</code></td><td><code>None</code></td><td>Đường dẫn <code>.pt</code> để lưu checkpoint giữa chừng và khi xong. <code>None</code> thì không lưu file nào.</td></tr>
+<tr><td><code>device</code></td><td><code>None</code></td><td><code>torch.device</code>. <code>None</code> thì <code>get_device()</code> tự chọn.</td></tr>
+<tr><td><code>render</code></td><td><code>False</code></td><td><code>True</code>: env số 0 mở cửa sổ, tất cả env chạy tuần tự (chậm).</td></tr>
+<tr><td><code>watch_every</code></td><td><code>0</code></td><td>Cứ mỗi bấy nhiêu bước env, dừng train và mở cửa sổ cho agent chơi. 0 là tắt.</td></tr>
+<tr><td><code>watch_episodes</code></td><td><code>1</code></td><td>Số ván mỗi lần xem.</td></tr>
+</tbody></table></div>
+
+<div class="callout note">
+<p class="callout-title">Script <code>.py</code> trên Windows</p>
+<p>Đặt lệnh train trong khối bảo vệ, nếu không các process env sẽ import lại script và gọi train đệ quy:</p>
+<pre><code class="language-python">def main():
+    ...
+
+if __name__ == "__main__":
+    main()
+</code></pre>
+<p>Trong Jupyter không cần. Ngoài ra, log có tiếng Việt nên console Windows mặc định (cp1252) sẽ báo <code>UnicodeEncodeError</code> khi chạy script riêng; chạy bằng <code>python -X utf8 script.py</code> hoặc đặt <code>PYTHONUTF8=1</code>. Dòng lệnh <code>python -m pacman_rl</code> tự xử lý việc này. Xem <a href="../troubleshooting.html#unicode">Xử lý sự cố</a>.</p>
+</div>
+
+<h2 id="watching">Theo dõi trong lúc train</h2>
+<h3 id="log-lines">Dòng log</h3>
+<p>PPO in một dòng mỗi <code>log_every</code> <em>update</em>; DQN in mỗi <code>log_every</code> <em>bước env</em> (đơn vị khác nhau, xem <a href="../reference/files-and-logs.html#units">đơn vị</a>). Dấu hiệu run khỏe:</p>
+<ul>
+<li><code>steps/s</code> ổn định sau vài chục giây đầu (nếu tụt dần có thể RAM đang thiếu).</li>
+<li><code>avg score(20)</code> có xu hướng tăng theo thời gian (dao động vài chục điểm giữa hai dòng là bình thường).</li>
+<li><code>entropy</code> (PPO) giảm từ ≈ 2.2 xuống dần, không sụp đột ngột về gần 0.</li>
+<li><code>Q</code> (DQN) tăng chậm và không phát nổ.</li>
+</ul>
+<p>Cách đọc chi tiết từng chỉ số: <a href="plotting.html">Vẽ biểu đồ, đọc log</a>.</p>
+
+<h3 id="visual">Xem agent chơi</h3>
+<pre><code class="language-bash">python -m pacman_rl train ppo --watch-every 500000   # mỗi 500k bước mở 1 ván
+</code></pre>
+<p>Train tạm dừng trong lúc ván đó chạy (cần có màn hình). <code>--render</code> thì khác: nó mở cửa sổ ngay trên env đang train nhưng làm cả quá trình chậm hẳn, chỉ nên dùng để kiểm tra nhanh.</p>
+
+<h2 id="stop">Dừng giữa chừng và checkpoint</h2>
+<ul>
+<li><strong>Ctrl+C</strong> (hoặc nút Stop trong notebook) là cách dừng an toàn: hàm bắt <code>KeyboardInterrupt</code>, đóng các env, lưu <code>.pt</code> và <em>trả về phần đã train</em>. CLI sau đó vẫn lưu đủ 3 file.</li>
+<li><strong>Checkpoint tự động</strong> chỉ có <code>.pt</code>: PPO mỗi <code>save_every</code> <em>update</em> (mặc định 200), DQN mỗi <code>save_every</code> <em>bước env</em> (mặc định 500,000). Cần có <code>save_path</code>.</li>
+<li><code>_episodes.npy</code> và <code>_log.npy</code> chỉ được ghi khi hàm train kết thúc (kể cả khi Ctrl+C). Nếu máy sập hay process bị giết đột ngột, bạn chỉ còn <code>.pt</code> checkpoint gần nhất.</li>
+</ul>
+<div class="callout tip">
+<p class="callout-title">Chạy rất dài?</p>
+<p>Đặt <code>save_every</code> nhỏ để mất ít nhất nếu máy treo. Với PPO mặc định, 200 update ≈ 410,000 bước.</p>
+</div>
+
+<h2 id="resume">Train tiếp từ model có sẵn</h2>
+<pre><code class="language-python">from pacman_rl import PPOConfig, train_ppo, load_run, get_device
+
+device = get_device()
+old = load_run("runs", "ppo", "ppo", device)       # TrainResult(model, log, episodes)
+cfg = PPOConfig(total_steps=1_000_000, lr=1e-4)    # lr thấp hơn cho giai đoạn tinh chỉnh
+new = train_ppo(cfg, model=old.model, save_path="runs/ppo_cont.pt", device=device)
+</code></pre>
+<div class="callout warn">
+<p class="callout-title">"Train tiếp" ở đây chỉ nạp trọng số</p>
+<p>Thư viện không lưu optimizer, bước hiện tại hay lịch learning rate. Vì vậy khi truyền <code>model=</code>:</p>
+<ul>
+<li>Optimizer (Adam) bắt đầu lại từ trạng thái trống.</li>
+<li><strong>PPO</strong>: lịch lr chạy lại từ <code>cfg.lr</code> về 0 trong <code>total_steps</code> mới. Nên đặt <code>lr</code> thấp hơn lần đầu.</li>
+<li><strong>DQN</strong>: replay buffer rỗng, <code>learning_starts</code> đếm lại, và epsilon lại bắt đầu từ <code>eps_start = 1.0</code> (tức agent chơi ngẫu nhiên trở lại!). Hãy đặt <code>eps_start</code> thấp (ví dụ <code>0.1</code>) khi train tiếp.</li>
+<li>Đường cong của lần train mới bắt đầu lại từ bước 0; <code>save_run</code> ra tên khác để không đè run cũ.</li>
+</ul>
+</div>
+
+<h2 id="multi-run">Chạy nhiều seed hoặc nhiều cấu hình</h2>
+<p>Một lần chạy RL rất nhiễu: cùng cấu hình mà khác seed có thể khác nhau xa. Muốn kết luận "cấu hình A tốt hơn B", chạy mỗi cấu hình với ít nhất 3 seed (<code>--seed 0/1/2</code>).</p>
+<div class="tabs">
+<div class="tab" data-title="Bash">
+<pre><code class="language-bash">for s in 0 1 2; do
+  python -m pacman_rl train ppo --seed $s --name ppo_base_s$s
+  python -m pacman_rl train ppo --seed $s --name ppo_c2_0.02_s$s --set c2=0.02
+done
+</code></pre></div>
+<div class="tab" data-title="PowerShell">
+<pre><code class="language-powershell">foreach ($s in 0,1,2) {
+  python -m pacman_rl train ppo --seed $s --name "ppo_base_s$s"
+  python -m pacman_rl train ppo --seed $s --name "ppo_c2_0.02_s$s" --set c2=0.02
+}
+</code></pre></div>
+<div class="tab" data-title="Python">
+<pre><code class="language-python">from pacman_rl import PPOConfig, train_ppo, save_run, get_device
+
+def main():
+    device = get_device()
+    for seed in (0, 1, 2):
+        for tag, kw in {"base": {}, "c2_0.02": {"c2": 0.02}}.items():
+            cfg = PPOConfig(seed=seed, **kw)
+            result = train_ppo(cfg, device=device)
+            save_run(result, "runs", f"ppo_{tag}_s{seed}")
+
+if __name__ == "__main__":
+    main()
+</code></pre></div>
+</div>
+<p>Rồi vẽ chung các run để so sánh (nhãn là tên run): <code>python -m pacman_rl plot ppo:ppo_base_s0 ppo:ppo_c2_0.02_s0</code>. Chạy lần lượt (không song song) vì mỗi lần train đã dùng hết CPU.</p>
+
+<h2 id="sizing">Chọn cỡ theo máy</h2>
+<h3 id="size-envs"><code>n_envs</code> và CPU</h3>
+<p>Mặc định 16 phù hợp với CPU nhiều nhân. Máy yếu hơn:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Máy</th><th>Gợi ý</th></tr></thead>
+<tbody>
+<tr><td>8 nhân trở lên, RAM 16 GB</td><td>Giữ nguyên <code>n_envs=16</code></td></tr>
+<tr><td>4 đến 6 nhân</td><td><code>--set n_envs=8 n_steps=256</code> (PPO giữ batch 2,048)</td></tr>
+<tr><td>Rất yếu hoặc kiểm tra nhanh</td><td><code>--set n_envs=4 n_steps=512</code>. <code>n_envs</code> luôn phải chẵn.</td></tr>
+</tbody></table></div>
+<p>Đây là gợi ý theo nguyên tắc chung chứ không phải kết quả đo trên mọi máy. Cách tin cậy nhất là chạy ngắn và so <code>steps/s</code>.</p>
+
+<h3 id="size-memory">Bộ nhớ</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Thành phần</th><th>Công thức</th><th>Mặc định</th></tr></thead>
+<tbody>
+<tr><td>Replay buffer DQN (RAM)</td><td><code>buffer_size × 7,080</code> byte</td><td>≈ 1.4 GB (200,000)</td></tr>
+<tr><td>Rollout PPO (thiết bị tính toán)</td><td><code>n_steps × n_envs × 28,224</code> byte</td><td>≈ 58 MB</td></tr>
+<tr><td>Process env</td><td><code>n_envs</code> process con</td><td>16</td></tr>
+</tbody></table></div>
+<p>Muốn buffer lớn hơn (ví dụ 1,000,000 mẫu) thì cần khoảng 7 GB RAM trống, tính trước khi tăng <code>buffer_size</code>.</p>
+
+<h3 id="size-time">Thời gian dự kiến</h3>
+<p>Tốc độ thật phụ thuộc máy. Trên máy phát triển dự án (RTX 3070 Ti Laptop), PPO đo được khoảng 2,400 đến 3,400 steps/s và DQN khoảng 600 đến 1,900 steps/s (DQN dao động theo RAM trống). Suy ra:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Run</th><th>Bước</th><th>Ước lượng (trên máy đó)</th></tr></thead>
+<tbody>
+<tr><td>PPO mặc định</td><td class="num">2,000,000</td><td>khoảng 10 đến 14 phút</td></tr>
+<tr><td>DQN mặc định</td><td class="num">10,000,000</td><td>khoảng 1.5 đến 4.5 giờ</td></tr>
+</tbody></table></div>
+<p>Hãy coi đây là bậc độ lớn để lên kế hoạch, và đo lại bằng một lần chạy ngắn trên máy của bạn.</p>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

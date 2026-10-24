@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chọn và chỉnh tham số · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="guides/hyperparameters.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Hướng dẫn</div>
+<h1>Chọn và chỉnh tham số</h1>
+<p class="lead">Từng tham số làm gì đã có ở <a href="../reference/ppo-config.html">PPOConfig</a> và <a href="../reference/dqn-config.html">DQNConfig</a>. Trang này trả lời câu hỏi thực tế hơn: <em>run của tôi trông như thế này, nên chỉnh gì trước?</em></p>
+
+<div class="callout warn">
+<p class="callout-title">Mức độ chắc chắn của trang này</p>
+<p>Các ngưỡng và gợi ý dưới đây là <strong>kinh nghiệm chung</strong> của RL trên Atari, không phải kết quả đo trên dự án này. Hãy coi chúng là giả thuyết để thử, và kiểm chứng bằng nhiều seed.</p>
+</div>
+
+<h2 id="rules">Năm nguyên tắc</h2>
+<ol>
+<li><strong>Đổi từng thứ một.</strong> Đổi hai tham số cùng lúc thì không biết cái nào gây ra khác biệt.</li>
+<li><strong>Dùng nhiều seed.</strong> Một lần chạy RL nhiễu đến mức hai seed của cùng cấu hình có thể khác nhau xa. Ít nhất 3 seed trước khi kết luận.</li>
+<li><strong>Giữ <code>total_steps</code> cố định khi so sánh.</strong> Với PPO, lr giảm về 0 theo tổng số bước; với DQN, epsilon giảm theo tỷ lệ của tổng số bước. Đổi <code>total_steps</code> là đổi cả hai lịch này.</li>
+<li><strong>Nhìn log, không chỉ điểm.</strong> Điểm rất nhiễu; entropy, KL, <code>q_mean</code> báo lỗi sớm hơn nhiều. Xem <a href="plotting.html">Vẽ biểu đồ, đọc log</a>.</li>
+<li><strong>Ghi lại cấu hình</strong> bằng cách đặt tên run mô tả được nó (<code>ppo_lr1e4_c2_0.02_s1</code>), vì thư viện không lưu config.</li>
+</ol>
+
+<h2 id="ppo-order">PPO: chỉnh theo thứ tự này</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>Tham số</th><th>Vì sao đứng ở đây</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><a href="../reference/ppo-config.html#lr"><code>lr</code></a></td><td>Nhạy nhất; sai lr thì mọi thứ khác không còn ý nghĩa.</td></tr>
+<tr><td>2</td><td><a href="../reference/ppo-config.html#c2"><code>c2</code></a></td><td>Quyết định agent khám phá bao nhiêu trước khi chốt chiến thuật.</td></tr>
+<tr><td>3</td><td><a href="../reference/ppo-config.html#n_envs"><code>n_envs</code></a> × <a href="../reference/ppo-config.html#n_steps"><code>n_steps</code></a></td><td>Quy định cỡ batch; chủ yếu đổi theo phần cứng.</td></tr>
+<tr><td>4</td><td><a href="../reference/ppo-config.html#epochs"><code>epochs</code></a>, <a href="../reference/ppo-config.html#clip_eps"><code>clip_eps</code></a></td><td>Hai núm "độ táo bạo" của mỗi update.</td></tr>
+<tr><td>5</td><td><a href="../reference/ppo-config.html#gamma"><code>gamma</code></a>, <a href="../reference/ppo-config.html#lam"><code>lam</code></a>, <a href="../reference/ppo-config.html#c1"><code>c1</code></a>, <a href="../reference/ppo-config.html#max_grad"><code>max_grad</code></a></td><td>Giá trị chuẩn thường đã ổn; chỉ đụng tới khi có bằng chứng.</td></tr>
+</tbody></table></div>
+
+<h2 id="ppo-symptoms">PPO: triệu chứng và việc nên thử</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Bạn thấy</th><th>Có thể là</th><th>Thử</th></tr></thead>
+<tbody>
+<tr><td><code>entropy</code> đứng gần <strong>2.19</strong> rất lâu, điểm không tăng</td><td>Học quá chậm, hoặc <code>c2</code> quá lớn khiến policy mãi ngẫu nhiên</td><td>Tăng <code>lr</code> (ví dụ 5e-4) hoặc giảm <code>c2</code> (0.005)</td></tr>
+<tr><td><code>entropy</code> <strong>sụt rất nhanh</strong> về gần 0, điểm dừng sớm</td><td>Chốt sớm vào chiến thuật kém (thiếu khám phá)</td><td>Tăng <code>c2</code> (0.02), giảm <code>lr</code></td></tr>
+<tr><td><code>kl</code> thường xuyên lớn (khoảng &gt; 0.05) hoặc <code>clipfrac</code> thường &gt; 0.3</td><td>Mỗi update đi quá xa</td><td>Giảm <code>lr</code>, giảm <code>epochs</code>, hoặc giảm <code>clip_eps</code></td></tr>
+<tr><td><code>clipfrac</code> luôn ≈ 0 và <code>kl</code> rất nhỏ, học chậm</td><td>Update quá rụt rè</td><td>Tăng <code>lr</code> hoặc <code>epochs</code></td></tr>
+<tr><td>Điểm tăng rồi <strong>sụp đột ngột</strong></td><td>Bất ổn: lr quá lớn hoặc dữ liệu một lần xấu</td><td>Giảm <code>lr</code>; kiểm tra <code>kl</code> trước chỗ sụp</td></tr>
+<tr><td><code>v_loss</code> rất lớn và không giảm</td><td>Critic không theo kịp</td><td>Tăng <code>c1</code>, kiểm tra thang reward nếu bạn đổi <code>reward_fn</code></td></tr>
+<tr><td>Điểm tốt khi train nhưng thấp khi <code>eval</code></td><td>Khác biệt chế độ chơi (lấy mẫu vs greedy), hoặc chỉ do nhiễu</td><td>Thử <code>--greedy</code> và không <code>--greedy</code>, tăng số ván <code>--episodes</code></td></tr>
+</tbody></table></div>
+<p>Các con số như "0.05" và "0.3" là ngưỡng thô để biết <em>khi nào để ý</em>, không phải ranh giới đúng sai.</p>
+
+<h2 id="dqn-symptoms">DQN: triệu chứng và việc nên thử</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Bạn thấy</th><th>Có thể là</th><th>Thử</th></tr></thead>
+<tbody>
+<tr><td><code>q_mean</code> tăng vô độ, <code>loss</code> nhảy lớn</td><td>Ước lượng Q phân kỳ (DQN gốc dễ đánh giá Q quá cao)</td><td>Giảm <code>lr</code>, tăng <code>target_update</code>, hoặc dùng <a href="../contributing/add-algorithm.html#double-dqn">Double DQN</a></td></tr>
+<tr><td>Điểm không tăng dù <code>eps</code> đã về <code>eps_end</code></td><td>Chưa học được, hoặc kẹt trong thói quen</td><td>Kiểm tra <code>q_mean</code>/<code>loss</code>; thử tăng <code>eps_end</code> lên 0.1</td></tr>
+<tr><td>Điểm tốt khi <code>eps</code> cao nhưng tệ đi khi <code>eps</code> giảm</td><td>Agent chưa khai thác tốt</td><td>Kéo dài đoạn giảm: tăng <code>eps_frac</code></td></tr>
+<tr><td>Chạy chậm dần, RAM đầy</td><td><code>buffer_size</code> quá lớn so với RAM trống</td><td>Giảm <code>buffer_size</code>, đóng ứng dụng khác</td></tr>
+<tr><td><code>log</code> rỗng sau run thử</td><td><code>total_steps &lt; log_every</code></td><td>Đặt <code>log_every</code> nhỏ, ví dụ <code>--set log_every=1000</code></td></tr>
+</tbody></table></div>
+
+<h2 id="dqn-ratio">DQN: giữ tỷ lệ tái sử dụng khi đổi <code>n_envs</code></h2>
+<p>Mỗi vòng DQN thu <code>n_envs</code> mẫu mới và học <code>updates_per_iter × batch_size</code> mẫu. Tỷ lệ tái sử dụng bằng <code>updates_per_iter × batch_size / n_envs</code> (mặc định 8, đúng với DQN gốc). Đổi <code>n_envs</code> mà quên điều chỉnh sẽ làm tỷ lệ này trôi đi, và hành vi học thay đổi theo.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Đổi thành</th><th>Giữ tỷ lệ 8 bằng</th></tr></thead>
+<tbody>
+<tr><td><code>n_envs=8</code></td><td><code>batch_size=64</code> (hoặc giữ 128 và đặt <code>updates_per_iter=1</code> để ratio = 16)</td></tr>
+<tr><td><code>n_envs=32</code></td><td><code>batch_size=256</code> (hoặc <code>updates_per_iter=2</code> với <code>batch_size=128</code>)</td></tr>
+</tbody></table></div>
+<pre><code class="language-bash">python -m pacman_rl train dqn --set n_envs=8 batch_size=64
+</code></pre>
+
+<h2 id="ppo-batch">PPO: giữ cỡ batch khi đổi <code>n_envs</code></h2>
+<p>Với PPO, batch là <code>n_envs × n_steps</code>. Máy yếu hơn thì giảm <code>n_envs</code> và tăng <code>n_steps</code> theo tỷ lệ nghịch để batch (và số gradient step mỗi update) không đổi:</p>
+<pre><code class="language-bash">python -m pacman_rl train ppo --set n_envs=8 n_steps=256     # batch vẫn 2048
+python -m pacman_rl train ppo --set n_envs=4 n_steps=512     # batch vẫn 2048
+</code></pre>
+<p><code>n_steps</code> lớn hơn cũng nghĩa là mỗi env đi dài hơn giữa hai lần cập nhật, nên không hoàn toàn tương đương, nhưng là điểm xuất phát hợp lý.</p>
+
+<h2 id="short-runs">Thử nhanh bằng run ngắn</h2>
+<ul>
+<li>PPO <code>--steps 100000</code> đến <code>200000</code> đủ để thấy entropy bắt đầu giảm và điểm nhúc nhích. Đặt <code>log_every</code> nhỏ (5 đến 10) để thấy log.</li>
+<li>Đừng so điểm của run ngắn với run dài: lịch lr đã khác nhau.</li>
+<li>DQN cần ít nhất vài trăm nghìn bước mới có tín hiệu rõ; khi thử ngắn, giảm <code>learning_starts</code>, <code>target_update</code>, <code>log_every</code> cho cân đối:</li>
+</ul>
+<pre><code class="language-bash">python -m pacman_rl train dqn --steps 300000 --set learning_starts=5000 target_update=2000 log_every=20000
+</code></pre>
+
+<h2 id="starting-points">Vài điểm xuất phát để thử</h2>
+<p>Chưa kiểm chứng trên dự án này; dùng làm giả thuyết đầu tiên, so với mặc định bằng nhiều seed:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Mục tiêu</th><th>Lệnh gợi ý</th></tr></thead>
+<tbody>
+<tr><td>Khám phá nhiều hơn (PPO)</td><td><code>--set c2=0.02</code></td></tr>
+<tr><td>Ổn định hơn (PPO)</td><td><code>--set lr=1e-4 epochs=3</code></td></tr>
+<tr><td>Máy 8 nhân (PPO)</td><td><code>--set n_envs=8 n_steps=256</code></td></tr>
+<tr><td>Ít RAM (DQN)</td><td><code>--set buffer_size=100000</code></td></tr>
+<tr><td>Khám phá lâu hơn (DQN)</td><td><code>--set eps_frac=0.1</code></td></tr>
+</tbody></table></div>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reward shaping · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="guides/reward-shaping.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Hướng dẫn</div>
+<h1>Reward shaping</h1>
+<p class="lead">Đổi tín hiệu thưởng mà agent học từ đó (phạt mỗi bước, phạt đứng bí, thưởng thêm...) mà vẫn giữ điểm báo cáo là điểm thật của game.</p>
+
+<h2 id="how">Cơ chế: <code>reward_fn</code></h2>
+<p>Cả <code>PPOConfig</code> và <code>DQNConfig</code> có trường <code>reward_fn</code>. Mỗi bước, trainer lấy <strong>reward thật</strong> của một nhóm env (mảng độ dài <code>n_envs / 2</code>), gọi <code>reward_fn</code> để ra <strong>reward học</strong>, và chỉ dùng kết quả đó cho gradient.</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Bị <code>reward_fn</code> ảnh hưởng?</th></tr></thead>
+<tbody>
+<tr><td>Gradient / mục tiêu học</td><td><strong>Có</strong></td></tr>
+<tr><td>Điểm cả ván (<code>episodes</code>, <code>avg score(20)</code>)</td><td>Không, luôn là điểm thật</td></tr>
+<tr><td>Số viên năng lượng, số ma (<code>pellets</code>, <code>ghosts</code>)</td><td>Không, tính từ reward thật</td></tr>
+<tr><td>Điểm khi <code>eval</code></td><td>Không, đánh giá chỉ cộng reward thật</td></tr>
+</tbody></table></div>
+<p>Nhờ vậy bạn đổi reward thoải mái mà vẫn so sánh công bằng các cấu hình trên cùng một thang điểm.</p>
+<p>Mặc định là <code>log_reward</code>: <code>log1p(r / 10)</code>. Hàm của bạn nhận mảng reward thật (<code>0, 10, 50, 200, ...</code>) và trả về mảng cùng độ dài. Thang giá trị cần nhất quán với mặc định: chấm nhỏ ≈ 0.69, viên năng lượng ≈ 1.79, ma ≈ 3.0 đến 5.1.</p>
+
+<h2 id="step-penalty">Ví dụ 1: phạt nhỏ mỗi bước (hàm thuần)</h2>
+<p>Đơn giản nhất, không cần trạng thái:</p>
+<pre><code class="language-python">from functools import partial
+from pacman_rl import PPOConfig, train_ppo
+from pacman_rl.envs import log_reward
+
+def log_reward_with_step_penalty(r, penalty=0.01):
+    return log_reward(r) - penalty
+
+cfg = PPOConfig(reward_fn=partial(log_reward_with_step_penalty, penalty=0.02))
+train_ppo(cfg, save_path="runs/ppo_penalty.pt")
+</code></pre>
+<p>Đặt hàm ở cấp module và dùng <code>partial</code> thay cho <code>lambda</code> để về sau lưu/ghi lại config dễ hơn.</p>
+<div class="callout warn">
+<p class="callout-title">Chọn độ lớn phạt cẩn thận</p>
+<p>So với thang reward học (chấm 0.69), phạt 0.02 mỗi bước là nhỏ nhưng cộng dồn: sau 100 bước không ăn gì là −2. Phạt quá lớn khiến agent thấy "chết sớm" rẻ hơn "sống mà không ăn", và nó sẽ học cách lao vào ma. Hãy bắt đầu nhỏ (0.01 đến 0.02) và theo dõi điểm cùng biểu đồ ma/viên.</p>
+</div>
+
+<h2 id="stateful">Ví dụ 2: phạt khi "đứng bí" (cần trạng thái)</h2>
+<p>Ý tưởng: không phạt đều mỗi bước, chỉ phạt khi một env đã đi quá <code>patience</code> bước liên tiếp mà không có reward dương. Ít can thiệp hơn phạt đều. Việc này cần <em>nhớ</em> số bước đứng bí của từng env, nên một hàm thuần không đủ; ta dùng một object có <code>__call__</code>.</p>
+<pre><code class="language-python">import numpy as np
+from pacman_rl import PPOConfig, train_ppo
+from pacman_rl.envs import log_reward
+
+class StuckPenalty:
+    """reward_fn có trạng thái: log_reward, trừ thêm `penalty` mỗi bước khi một env đã
+    `patience` bước liên tiếp không có reward dương. Mỗi nhóm env có bộ đếm riêng."""
+
+    def __init__(self, group_size, n_groups=2, patience=50, penalty=0.02):
+        self.counters = [np.zeros(group_size, dtype=np.int64) for _ in range(n_groups)]
+        self.patience, self.penalty, self.calls = patience, penalty, 0
+
+    def __call__(self, reward):
+        reward = np.asarray(reward)
+        c = self.counters[self.calls % len(self.counters)]   # train gọi lần lượt nhóm 0, 1, 0, 1, ...
+        self.calls += 1
+        c[:] = np.where(reward &gt; 0, 0, c + 1)
+        stuck = c &gt; self.patience
+        return (log_reward(reward) - self.penalty * stuck).astype(np.float32)
+
+def main():                                  # Windows: chạy bằng  python -X utf8 file.py  (log có tiếng Việt)
+    cfg = PPOConfig(n_envs=16, reward_fn=StuckPenalty(group_size=16 // 2))
+    train_ppo(cfg, save_path="runs/ppo_stuck.pt")
+
+if __name__ == "__main__":
+    main()
+</code></pre>
+<p>Hai điều cần hiểu để dùng đúng:</p>
+<ol>
+<li><strong>Vì sao đếm <code>calls % 2</code>.</strong> <code>reward_fn</code> chỉ nhận mảng reward, không biết đó là nhóm nào. Nhưng cả <code>train_ppo</code> lẫn <code>train_dqn</code> luôn gọi nó đúng một lần cho mỗi nhóm, lần lượt nhóm 0 rồi nhóm 1 trong mỗi bước thời gian, nên thứ tự gọi cho ta biết nhóm. Nếu bạn sửa trainer thay đổi thứ tự này, lớp trên sẽ sai.</li>
+<li><strong>Cái nó không biết.</strong> <code>reward_fn</code> không nhận <code>done</code>, nên bộ đếm không được reset khi mất mạng. Sau khi chết, bộ đếm chạy tiếp cho đến khi có reward dương đầu tiên của mạng mới (thường rất nhanh vì chấm ở ngay gần vị trí hồi sinh). Đây là xấp xỉ chấp nhận được; nếu cần chính xác, dùng cách bên dưới.</li>
+</ol>
+<div class="callout note">
+<p class="callout-title">Đã kiểm chứng</p>
+<p>Lớp <code>StuckPenalty</code> trên đã được chạy với <code>train_ppo</code> (cấu hình nhỏ) và kiểm tra bằng tay: bộ đếm tăng và phạt chỉ bắt đầu sau <code>patience</code> bước, env luôn có reward dương không bị phạt.</p>
+</div>
+
+<h2 id="wrapper">Cách chính xác hơn: wrapper env (chưa có trong thư viện)</h2>
+<p>Nếu cần reset đúng khi mất mạng, cách bền hơn là làm ở tầng env, nơi biết rõ từng bước và từng cái chết:</p>
+<ol>
+<li>Viết <code>StuckPenalty(gym.Wrapper)</code> trong <code>envs/wrappers.py</code>, đếm số bước không có reward dương, reset khi <code>terminated</code>, và trả thêm <code>info["shaping"]</code> (không sửa <code>reward</code>, để <code>count_events</code> vẫn đếm đúng).</li>
+<li>Bọc nó trong <code>make_env</code> chỉ khi <code>episodic_life=True</code> (lúc học). Đánh giá gọi <code>make_env()</code> không có cờ đó nên không bị ảnh hưởng.</li>
+<li>Cho <code>PipelinedEnvs.recv</code> trả thêm phần shaping để trainer cộng vào reward học.</li>
+</ol>
+<p>Việc này sửa chữ ký <code>recv</code> nên chạm tới cả hai trainer; xem <a href="../contributing/extend-components.html">Thêm chỉ số, reward, mạng</a> để biết các quy ước khi sửa lõi.</p>
+
+<h2 id="compare">So sánh có kiểm soát</h2>
+<ol>
+<li>Chạy mỗi cấu hình (không phạt, phạt mỗi bước, phạt đứng bí) với ít nhất 3 seed.</li>
+<li>Đặt tên run mô tả được: <code>ppo_base_s0</code>, <code>ppo_step002_s0</code>, <code>ppo_stuck_s0</code>.</li>
+<li>So điểm bằng <code>eval</code> (điểm thật, cùng seed ván) và bằng biểu đồ <em>ma/viên năng lượng</em> để xem hành vi có đổi không.</li>
+<li>Chú ý tương tác với <code>EpisodicLife</code>: phạt thời gian cộng với việc chết cắt hết reward tương lai có thể làm agent liều lĩnh hoặc né ma kém hơn. Luôn so cả có và không có phạt.</li>
+</ol>
+<pre><code class="language-bash">python -m pacman_rl plot ppo:ppo_base_s0 ppo:ppo_step002_s0 ppo:ppo_stuck_s0 --out compare.png
+</code></pre>
+<p>Vì <code>reward_fn</code> không đặt được từ dòng lệnh, các run có reward riêng phải train bằng script Python (như ví dụ trên), rồi vẽ bằng CLI hoặc Python đều được.</p>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

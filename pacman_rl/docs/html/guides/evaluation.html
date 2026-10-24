@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đánh giá và xem agent chơi · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="guides/evaluation.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Hướng dẫn</div>
+<h1>Đánh giá và xem agent chơi</h1>
+<p class="lead">Điểm in ra lúc train chưa phải thước đo cuối cùng. Đánh giá chạy riêng, theo cách công bằng và lặp lại được: game đầy đủ 3 mạng, điểm thật, seed cố định.</p>
+
+<h2 id="why">Vì sao cần bước đánh giá riêng</h2>
+<ul>
+<li>Lúc train, agent chơi bằng policy đang thay đổi, và còn có khám phá (lấy mẫu hoặc epsilon cao).</li>
+<li>Env lúc train dùng <code>EpisodicLife</code> (mất mạng = hết episode); đánh giá chạy <em>trọn ván 3 mạng</em> như game thật.</li>
+<li>Điểm đánh giá là <strong>điểm thật</strong>, không qua <code>reward_fn</code>, nên so sánh được giữa các cấu hình reward khác nhau.</li>
+</ul>
+
+<h2 id="cli">Chấm điểm bằng dòng lệnh</h2>
+<pre><code class="language-bash">python -m pacman_rl eval ppo --episodes 20
+python -m pacman_rl eval ppo --episodes 20 --greedy
+python -m pacman_rl eval dqn --name dqn_seed1 --eps 0.01
+</code></pre>
+<pre class="plain"><code>PPO trên 20 ván: mean &lt;trung bình&gt; | std &lt;độ lệch chuẩn&gt; | max &lt;ván cao nhất&gt;
+Điểm: [&lt;điểm từng ván&gt;]</code></pre>
+<p>Tùy chọn đầy đủ ở <a href="../reference/cli.html#eval">CLI: eval</a>.</p>
+
+<h2 id="python">Chấm điểm trong Python</h2>
+<pre><code class="language-python">from pacman_rl import load_run, ppo_policy, dqn_policy, evaluate, random_baseline, get_device
+from pacman_rl.plotting import plot_eval
+
+device = get_device()
+ppo = load_run("runs", "ms_pacman_ppo", "ppo", device)
+dqn = load_run("runs", "ms_pacman_dqn", "dqn", device)
+
+results = {
+    "Random": random_baseline(5),
+    "PPO": evaluate(ppo_policy(ppo.model, device), n_episodes=10),
+    "DQN": evaluate(dqn_policy(dqn.model, device, eps=0.05), n_episodes=10),
+}
+plot_eval(results, save_path="eval.png")      # in bảng mean/std/max và vẽ boxplot
+</code></pre>
+<p><code>random_baseline</code> cho biết agent không học gì đạt bao nhiêu điểm. Nếu agent của bạn không hơn nó rõ rệt thì chưa học được gì đáng kể.</p>
+
+<h2 id="settings">Các lựa chọn khi chấm điểm</h2>
+<h3 id="episodes">Số ván</h3>
+<p>Điểm mỗi ván dao động mạnh (độ lệch chuẩn thường lớn so với trung bình). 10 ván cho cảm nhận ban đầu; muốn so sánh hai agent gần nhau thì dùng 30 ván trở lên và nhìn cả <code>std</code>, đừng chỉ nhìn trung bình.</p>
+
+<h3 id="seeds">Seed</h3>
+<p><code>evaluate</code> dùng seed cố định: ván thứ <code>i</code> dùng seed <code>1000 + i</code>. Mọi agent được chấm trên <em>cùng các tình huống xuất phát</em>, nên so sánh công bằng. Đổi <code>seed=...</code> nếu muốn một bộ ván khác.</p>
+<div class="callout note">
+<p class="callout-title">Seed cố định chưa phải kết quả cố định</p>
+<p>Seed chỉ cố định phía env. PPO mặc định <em>lấy mẫu</em> action, nên lần chạy sau cho điểm hơi khác. Nếu cần đúng từng con số (ví dụ viết báo cáo), dùng <code>greedy=True</code> / <code>--greedy</code>: khi đó không còn yếu tố ngẫu nhiên nào ở phía policy.</p>
+</div>
+
+<h3 id="modes">PPO: lấy mẫu hay greedy</h3>
+<ul>
+<li><strong>Lấy mẫu</strong> (mặc định): chơi đúng như lúc train. Phản ánh policy đã học.</li>
+<li><strong>Greedy</strong>: luôn chọn action có xác suất cao nhất. Thường ổn định hơn nhưng đôi khi kẹt lặp một chuyển động.</li>
+</ul>
+<p>Hãy thử cả hai và báo cáo rõ bạn dùng cái nào.</p>
+
+<h3 id="eps">DQN: epsilon khi chơi</h3>
+<p>Mặc định <code>eps=0.05</code>. Greedy tuyệt đối (<code>eps=0</code>) có thể làm agent kẹt; một chút ngẫu nhiên giúp thoát. Dùng cùng một <code>eps</code> cho mọi lần so sánh.</p>
+
+<h3 id="max_steps"><code>max_steps</code></h3>
+<p>Mỗi ván bị cắt sau <code>max_steps=4500</code> bước (18,000 frame, khoảng 5 phút game) để tránh chạy vô hạn khi agent kẹt. Agent rất giỏi có thể chạm trần này. Khi đó điểm bị cắt thấp hơn thực tế; tăng <code>max_steps</code> trong Python (CLI chưa có tùy chọn này).</p>
+<pre><code class="language-python">evaluate(act, n_episodes=10, max_steps=20000)
+</code></pre>
+
+<h2 id="custom">Tự viết policy</h2>
+<p>Một policy chỉ là hàm <code>act(obs) -> int</code> với <code>obs</code> là <code>np.ndarray</code> <code>uint8</code> hình <code>(4, 84, 84)</code>. Nhờ vậy bạn có thể đo bất kỳ thứ gì bằng cùng cách:</p>
+<pre><code class="language-python">import random
+from pacman_rl import evaluate
+
+def always_right(obs):
+    return 2                      # RIGHT
+
+def jittery(obs):
+    return random.choice([2, 3])  # RIGHT hoặc LEFT
+
+print(evaluate(always_right, n_episodes=5))
+print(evaluate(jittery, n_episodes=5))
+</code></pre>
+<p>Bảng chỉ số action ở <a href="../concepts/environment.html#actions">Môi trường và các loại điểm</a>. Ví dụ khác: policy từ một mạng khác, tập luật, hoặc ensemble nhiều model (trung bình Q của vài <code>QNetwork</code>).</p>
+
+<h2 id="watch">Xem agent chơi</h2>
+<pre><code class="language-bash">python -m pacman_rl play ppo --greedy --episodes 3
+</code></pre>
+<pre><code class="language-python">from pacman_rl import watch, ppo_policy
+watch(ppo_policy(ppo.model, device), episodes=2)     # in điểm từng ván
+</code></pre>
+<p>Cần có màn hình (mở cửa sổ game). Quan sát hành vi bằng mắt thường hay lộ ra điều mà số điểm không nói: agent đi vòng vòng, né ma kém, bỏ qua viên năng lượng...</p>
+
+<h2 id="report">Báo cáo kết quả</h2>
+<p>Một báo cáo có thể tin cậy cần có: số ván, seed đánh giá, chế độ chọn action (<code>greedy</code> hoặc <code>eps</code>), cả <code>mean</code> lẫn <code>std</code> hoặc boxplot, mốc <code>random_baseline</code>, và nếu có thể, kết quả của nhiều seed <em>train</em> (không chỉ nhiều ván chơi của một model).</p>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

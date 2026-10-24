@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Xử lý sự cố và FAQ · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-root="./" data-page="troubleshooting.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Khác</div>
+<h1>Xử lý sự cố và FAQ</h1>
+<p class="lead">Thông báo lỗi hay gặp, cách hiểu và cách sửa; cùng những câu hỏi thường gặp về cách thư viện hoạt động. Các lỗi có ghi "đã tái hiện" đã được chạy thật để lấy đúng thông báo.</p>
+
+<h2 id="install">Cài đặt và môi trường</h2>
+
+<h3 id="cpu-only">Máy có GPU nhưng thiết bị là <code>cpu</code></h3>
+<p><code>describe_device(get_device())</code> in <code>cpu | CPU</code>. Torch bạn cài là bản CPU (thường do <code>pip</code> kéo torch tự động đè lên). Cài lại bản CUDA rồi cài lại pacman_rl với <code>--no-deps</code>:</p>
+<pre><code class="language-bash">pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+pip install -e pacman_rl --no-deps
+</code></pre>
+
+<h3 id="no-module"><code>ModuleNotFoundError: No module named 'pacman_rl'</code></h3>
+<p>Thư viện chưa được cài vào môi trường đang dùng, hoặc bạn đang chạy bằng Python của môi trường khác. Kiểm tra bằng <code>python -c "import sys; print(sys.executable)"</code>, bật đúng môi trường rồi <code>pip install -e pacman_rl</code>.</p>
+
+<h3 id="ale-namespace"><code>NamespaceNotFound: Namespace ALE not found</code></h3>
+<p>(Đã tái hiện.) Xảy ra khi bạn tự gọi <code>gym.make("ALE/MsPacman-v5")</code> mà chưa <code>import ale_py</code>. <code>make_env()</code> của thư viện đã import sẵn, nên dùng nó thay vì <code>gym.make</code> trực tiếp, hoặc thêm <code>import ale_py</code> ở đầu.</p>
+
+<h3 id="numpy2">Lỗi liên quan đến numpy khi import</h3>
+<p>Dự án ghim <code>numpy&lt;2</code> để khớp gymnasium 0.29 và torch 2.3. Nếu một gói khác nâng numpy lên 2.x, đưa về: <code>pip install "numpy&lt;2"</code>.</p>
+
+<h2 id="windows">Windows</h2>
+
+<h3 id="windows-main">Script chạy lại chính nó, hoặc báo "bootstrapping phase"</h3>
+<p>Env song song dùng <code>multiprocessing</code> kiểu <em>spawn</em>: mỗi process con import lại file chính. Lệnh <code>train_*</code> đặt ngoài khối bảo vệ sẽ được chạy lại trong process con, gây lỗi hoặc vòng lặp tạo process. Đặt vào hàm và bảo vệ:</p>
+<pre><code class="language-python">def main():
+    ...  # gọi train_ppo / train_dqn ở đây
+
+if __name__ == "__main__":
+    main()
+</code></pre>
+<p>Dòng lệnh <code>python -m pacman_rl ...</code> đã xử lý sẵn (<code>__main__.py</code>), và notebook thường không cần.</p>
+
+<h3 id="unicode"><code>UnicodeEncodeError: 'charmap' codec can't encode character</code></h3>
+<p>(Đã tái hiện.) Log của hàm train có tiếng Việt, mà console Windows mặc định là cp1252. Gọi <code>train_ppo</code> trong script riêng sẽ dừng ngay ở dòng <code>print</code> đầu tiên. Cách sửa:</p>
+<pre><code class="language-bash">python -X utf8 train_script.py
+# hoặc đặt biến môi trường cho cả phiên:   set PYTHONUTF8=1      (PowerShell: $env:PYTHONUTF8 = "1")
+</code></pre>
+<p>Dòng lệnh <code>python -m pacman_rl</code> tự chuyển stdout sang UTF-8 nên không bị.</p>
+
+<h2 id="cli">Dòng lệnh</h2>
+
+<h3 id="bad-param"><code>Không có tham số 'xxx'. Hợp lệ: ...</code></h3>
+<p>(Đã tái hiện.) Tên sau <code>--set</code> không có trong config của thuật toán đang train. Thông báo liệt kê các tên hợp lệ. Nhớ rằng tham số của PPO và DQN khác nhau (<code>n_steps</code>, <code>clip_eps</code> chỉ có ở PPO; <code>buffer_size</code>, <code>eps_*</code> chỉ có ở DQN).</p>
+
+<h3 id="bool-set"><code>ValueError: could not convert string to float</code> với <code>--set</code></h3>
+<p>(Đã tái hiện.) Trường kiểu <code>bool</code> được đọc qua <code>float</code>, nên dùng <code>1</code> hoặc <code>0</code>, không dùng <code>true</code>/<code>false</code> hay <code>maybe</code>.</p>
+
+<h3 id="odd-envs"><code>AssertionError</code> ngay khi bắt đầu train</h3>
+<p>(Đã tái hiện.) <code>n_envs</code> lẻ. <code>PipelinedEnvs</code> chia env thành 2 nhóm nên <code>n_envs</code> phải chẵn. Thông báo lỗi không có chữ, nhưng nguyên nhân là điều kiện <code>n_envs % n_groups == 0</code>.</p>
+
+<h3 id="wrong-algo"><code>Error(s) in loading state_dict for QNetwork: Missing key(s) ... "head.weight"</code></h3>
+<p>(Đã tái hiện.) Bạn nạp một run PPO bằng <code>algo="dqn"</code> (hoặc ngược lại). <code>algo</code> quyết định lớp mạng được dựng, và trọng số PPO có khóa <code>actor.*</code>/<code>critic.*</code> thay vì <code>head.*</code>. Dùng đúng <code>algo</code> của run: <code>load_run(dir, name, "ppo")</code> cho run PPO.</p>
+
+<h2 id="training">Trong lúc train</h2>
+
+<h3 id="slow">Chạy chậm (<code>steps/s</code> thấp)</h3>
+<ul>
+<li>Thiết bị là <code>cpu</code>: xem <a href="#cpu-only">trên</a>.</li>
+<li><code>--render</code> đang bật: chạy tuần tự trong một process, rất chậm. Tắt đi, dùng <code>--watch-every</code> nếu muốn xem.</li>
+<li><code>n_envs</code> nhiều hơn số nhân CPU: giảm xuống (và tăng <code>n_steps</code> cho PPO để giữ batch).</li>
+<li>RAM gần đầy (nhất là DQN): đóng ứng dụng khác, giảm <code>buffer_size</code>.</li>
+<li>Vài chục giây đầu chậm là bình thường (khởi động process con, khởi tạo CUDA).</li>
+</ul>
+
+<h3 id="oom-ram">Hết RAM khi train DQN</h3>
+<p>Replay buffer tốn khoảng <code>buffer_size × 7,080</code> byte (1.4 GB cho 200,000) cộng RAM của 16 process con. Giảm <code>buffer_size</code> (ví dụ <code>--set buffer_size=100000</code>) hoặc <code>n_envs</code>.</p>
+
+<h3 id="oom-gpu"><code>CUDA out of memory</code></h3>
+<p>Minibatch của PPO quá lớn so với GPU: tăng <code>n_minibatches</code> (minibatch = <code>batch / n_minibatches</code>) hoặc giảm <code>n_envs × n_steps</code>. Với DQN, giảm <code>batch_size</code>.</p>
+
+<h3 id="nan-score"><code>avg score(20)</code> là <code>nan</code></h3>
+<p>Chưa có ván nào (đủ 3 mạng) kết thúc, nên chưa có điểm để lấy trung bình. Bình thường ở những update đầu.</p>
+
+<h3 id="empty-log"><code>log</code> rỗng sau run ngắn (DQN)</h3>
+<p>DQN chỉ ghi <code>log</code> mỗi <code>log_every</code> bước env (mặc định 100,000). Run ngắn hơn thế sẽ không có điểm nào. Đặt <code>--set log_every=1000</code> (hoặc nhỏ hơn <code>total_steps</code>). PPO không bị vì nó ghi mỗi update.</p>
+
+<h3 id="loss-nan"><code>loss</code>, <code>q_mean</code> là <code>nan</code> ở đầu run DQN</h3>
+<p>Chưa học lần nào vì còn trong <code>learning_starts</code> bước đầu. Không phải lỗi.</p>
+
+<h3 id="stray">Process Python còn sót sau khi dừng đột ngột</h3>
+<p>Đóng terminal hay kill process cha giữa lúc train có thể để lại các process env con. Nếu máy bỗng chậm hoặc RAM không giải phóng, mở Task Manager (hoặc <code>Get-Process python</code>) và kết thúc các process Python thừa. Dùng Ctrl+C thay vì đóng cửa sổ để thư viện tự dọn.</p>
+
+<h2 id="results">Kết quả và biểu đồ</h2>
+
+<h3 id="third-plot">Biểu đồ "ma trên viên năng lượng" trống hoặc là một đường thẳng</h3>
+<p>Nó chia theo khoảng 100,000 bước; run ngắn hơn không có đủ khoảng. Xem <a href="guides/plotting.html#default">ba biểu đồ mặc định</a>; với run ngắn dùng <code>plot_events(runs, bin_size=10_000)</code>.</p>
+
+<h3 id="no-display"><code>play</code> hoặc <code>watch</code> không mở được cửa sổ</h3>
+<p>Các lệnh này cần màn hình (<code>render_mode="human"</code>). Trên máy từ xa không có màn hình, dùng <code>eval</code> (không mở cửa sổ) thay thế.</p>
+
+<h3 id="same-seed">Cùng <code>--seed</code> nhưng hai lần train ra kết quả khác nhau</h3>
+<p>Đúng như dự kiến. Seed chỉ cố định phần khởi tạo; thứ tự các process env trả kết quả, tính không xác định của GPU và việc lấy mẫu action làm hai lần chạy lệch dần. Dùng nhiều seed để đo độ nhiễu. Xem <a href="concepts/parallel-envs.html#seeds">Seed của từng env</a>.</p>
+
+<h3 id="eval-differs">Điểm <code>eval</code> khác điểm khi train</h3>
+<p>Có thể do: <code>eval</code> chạy trọn ván 3 mạng không qua <code>EpisodicLife</code>; PPO lấy mẫu vs <code>--greedy</code>; DQN còn <code>eps</code>; số ván ít nên nhiễu. Xem <a href="guides/evaluation.html">Đánh giá</a>.</p>
+
+<h2 id="faq">Câu hỏi thường gặp</h2>
+
+<h3 id="faq-policies">16 env có nghĩa là 16 policy không?</h3>
+<p>Không. Chỉ có một mạng neural. 16 env chỉ là nơi thu dữ liệu song song. Xem <a href="concepts/parallel-envs.html">Env song song và pipeline</a>.</p>
+
+<h3 id="faq-steps">"Bước" khác "frame" thế nào?</h3>
+<p>Một bước là một action, tương ứng 4 frame (frame-skip 4). 2 triệu bước là 8 triệu frame. Các bài báo Atari thường báo theo frame.</p>
+
+<h3 id="faq-gpu">Có bắt buộc phải có GPU không?</h3>
+<p>Không, nhưng không có GPU thì chậm đi nhiều và nên giảm <code>total_steps</code> khi thử. Phần mô phỏng emulator chạy trên CPU ở mọi trường hợp.</p>
+
+<h3 id="faq-which">Nên chọn PPO hay DQN?</h3>
+<p>Mặc định của dự án cho PPO 2 triệu bước và DQN 10 triệu bước; PPO chạy nhanh hơn theo thời gian thực trong các phép đo ở <a href="guides/training.html#size-time">thời gian dự kiến</a>. Cái nào cho điểm cao hơn trên Ms. Pacman phụ thuộc cấu hình và ngân sách, và chỉ nên kết luận sau khi chạy nhiều seed.</p>
+
+<h3 id="faq-linux">Có chạy trên Linux/macOS/Colab không?</h3>
+<p>Mã không dùng API riêng của Windows nên về nguyên tắc chạy được, nhưng dự án chỉ được thử trên Windows. Nếu bạn thử trên nền tảng khác, hãy kiểm tra các điểm: phiên bản <code>ale-py</code>, và cách <code>multiprocessing</code> bắt đầu process (trên Linux dùng fork, có thể khác về tiêu thụ RAM).</p>
+
+<h3 id="faq-resume">Tôi có thể train tiếp một run đã dừng không?</h3>
+<p>Một phần: <code>train_*(cfg, model=...)</code> nạp lại trọng số, còn optimizer, lịch lr, epsilon và replay buffer bắt đầu lại. Xem <a href="guides/training.html#resume">Train tiếp từ model có sẵn</a> để biết hệ quả và cách giảm nhẹ.</p>
+
+<h3 id="faq-config">Làm sao biết một run đã dùng siêu tham số nào?</h3>
+<p>Thư viện không lưu config. CLI in config ở dòng đầu; hãy ghi lại (<code>| tee</code>) và đặt <code>--name</code> mô tả cấu hình.</p>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="assets/nav.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/source-index.js"></script>
+<script src="assets/docs.js"></script>
+</body>
+</html>

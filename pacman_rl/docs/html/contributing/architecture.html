@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiến trúc mã nguồn · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="contributing/architecture.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Đóng góp</div>
+<h1>Kiến trúc mã nguồn</h1>
+<p class="lead">Mã nguồn được chia theo trách nhiệm, các module phụ thuộc một chiều và không có vòng import. Trang này cho bạn bản đồ để biết sửa gì ở đâu, và lý do đằng sau các lựa chọn thiết kế.</p>
+
+<h2 id="layout">Cấu trúc thư mục</h2>
+<pre class="plain"><code>pacman_rl/
+├── pyproject.toml
+├── README.md
+├── docs/html/             tài liệu này
+├── src/pacman_rl/
+│   ├── envs/              tạo env, wrapper, env song song, reward   (KHÔNG import torch)
+│   │   ├── factory.py       make_env, ENV_ID, N_ACTIONS, OBS_SHAPE
+│   │   ├── wrappers.py      EpisodicLife
+│   │   ├── vector.py        PipelinedEnvs, pop_game_scores
+│   │   └── rewards.py       log_reward, count_events
+│   ├── models/
+│   │   └── networks.py      make_cnn, ActorCriticCNN, QNetwork
+│   ├── agents/
+│   │   ├── ppo.py           PPOConfig, train_ppo
+│   │   ├── dqn.py           DQNConfig, train_dqn
+│   │   ├── buffers.py       VecFrameReplayBuffer
+│   │   └── common.py        TrainResult
+│   ├── evaluation.py        policy, evaluate, watch, random_baseline
+│   ├── runs.py              save_run, load_run, load_model
+│   ├── plotting.py          các hàm vẽ
+│   ├── cli.py               train / eval / play / plot
+│   └── utils.py             get_device, set_seed, moving_avg
+└── tests/test_core.py       test nhanh, không cần emulator</code></pre>
+
+<h2 id="deps">Module phụ thuộc nhau thế nào</h2>
+<p>Mũi tên <code>A → B</code> nghĩa là A import B. Không có vòng import.</p>
+<pre class="plain"><code>                 cli.py
+                   │
+      ┌────────────┼──────────────┬──────────────┐
+      ▼            ▼              ▼              ▼
+  plotting.py    runs.py      agents/        evaluation.py
+      │            │   ┌────────┤ ppo.py ────────┤
+      │            │   │        │ dqn.py         │
+      │            ▼   ▼        │ buffers.py     │
+      │          models/        │ common.py      │
+      │            │            ▼                ▼
+      └──────► utils.py ◄──── envs/ ◄────────────┘
+                              (factory, wrappers, vector, rewards)
+                              KHÔNG import torch</code></pre>
+<div class="table-wrap"><table>
+<thead><tr><th>Module</th><th>Trách nhiệm</th><th>Nội dung chính</th></tr></thead>
+<tbody>
+<tr><td><code>envs/factory.py</code></td><td>Tạo một env đã tiền xử lý</td><td><code>make_env</code>, <code>ENV_ID</code>, <code>N_ACTIONS</code>, <code>OBS_SHAPE</code></td></tr>
+<tr><td><code>envs/wrappers.py</code></td><td>Đổi tín hiệu kết thúc khi học</td><td><code>EpisodicLife</code></td></tr>
+<tr><td><code>envs/vector.py</code></td><td>Chạy nhiều env song song, xen kẽ với GPU</td><td><code>PipelinedEnvs</code>, <code>pop_game_scores</code></td></tr>
+<tr><td><code>envs/rewards.py</code></td><td>Biến đổi reward, đếm sự kiện</td><td><code>log_reward</code>, <code>count_events</code></td></tr>
+<tr><td><code>models/networks.py</code></td><td>Mạng neural</td><td><code>make_cnn</code>, <code>ActorCriticCNN</code>, <code>QNetwork</code></td></tr>
+<tr><td><code>agents/ppo.py</code>, <code>dqn.py</code></td><td>Vòng lặp train</td><td><code>PPOConfig</code>/<code>train_ppo</code>, <code>DQNConfig</code>/<code>train_dqn</code></td></tr>
+<tr><td><code>agents/buffers.py</code></td><td>Replay buffer của DQN</td><td><code>VecFrameReplayBuffer</code></td></tr>
+<tr><td><code>agents/common.py</code></td><td>Kiểu kết quả chung</td><td><code>TrainResult(model, log, episodes)</code></td></tr>
+<tr><td><code>evaluation.py</code></td><td>Chấm điểm, xem chơi</td><td><code>evaluate</code>, <code>watch</code>, <code>ppo_policy</code>, <code>dqn_policy</code>, <code>random_baseline</code></td></tr>
+<tr><td><code>runs.py</code></td><td>Lưu / nạp lên đĩa</td><td><code>save_run</code>, <code>load_run</code>, <code>load_model</code></td></tr>
+<tr><td><code>plotting.py</code></td><td>Biểu đồ</td><td><code>plot_training</code>, <code>plot_scores</code>, <code>plot_metric</code>, <code>plot_events</code>, <code>plot_eval</code></td></tr>
+<tr><td><code>cli.py</code></td><td>Dòng lệnh</td><td><code>train</code>, <code>eval</code>, <code>play</code>, <code>plot</code></td></tr>
+</tbody></table></div>
+
+<h2 id="flow">Luồng dữ liệu khi train</h2>
+<pre class="plain"><code> 16 process con (AsyncVectorEnv), chia 2 nhóm x 8
+ ┌───────────────────────────────────────────────────────┐
+ │ gym.make(ALE/MsPacman-v5)                             │
+ │   → AtariPreprocessing (skip 4, xám, 84x84, noop 30)  │
+ │   → EpisodicLife (mất mạng = done, ghi game_score)    │
+ │   → FrameStack(4)            → obs uint8 (4,84,84)    │
+ └───────────────┬───────────────────────▲───────────────┘
+   obs, reward thật, done, game_score    │ action
+                 ▼                       │
+ PipelinedEnvs.recv(g)            PipelinedEnvs.send(g)
+                 │                       ▲
+                 ├─ count_events(reward thật) → log["pellets"], log["ghosts"]
+                 ├─ game_score               → episodes [(bước, điểm thật)]
+                 └─ cfg.reward_fn(reward)    → reward dùng để học
+                                  │
+     PPO: B_rew → GAE → clipped loss       DQN: replay buffer → Bellman / Huber
+                                  │
+                         model (GPU) chọn action cho nhóm kế tiếp</code></pre>
+<p>Giải thích hai nhóm và việc chạy xen kẽ ở <a href="../concepts/parallel-envs.html">Env song song và pipeline</a>; ba loại điểm ở <a href="../concepts/environment.html#scores">Môi trường và các loại điểm</a>. Khi đánh giá, <code>evaluation.py</code> gọi <code>make_env()</code> không có <code>EpisodicLife</code> và cộng reward thật.</p>
+
+<h2 id="reading-order">Nên đọc code theo thứ tự nào</h2>
+<ol>
+<li><code>envs/factory.py</code> → <code>envs/wrappers.py</code>: biết quan sát và tín hiệu "kết thúc" đến từ đâu.</li>
+<li><code>envs/vector.py</code>: hiểu <code>send</code> / <code>recv</code> và vì sao có 2 nhóm.</li>
+<li><code>models/networks.py</code>: ngắn, chỉ vài chục dòng.</li>
+<li><code>agents/ppo.py</code>: ba pha rõ ràng (rollout, GAE, cập nhật). Đây là "mẫu" cho thuật toán on-policy.</li>
+<li><code>agents/dqn.py</code> và <code>agents/buffers.py</code>: mẫu cho thuật toán off-policy.</li>
+<li><code>runs.py</code>, <code>evaluation.py</code>, <code>plotting.py</code>, <code>cli.py</code>: phần xung quanh.</li>
+</ol>
+
+<h2 id="decisions">Lý do thiết kế và đánh đổi</h2>
+
+<h3 id="config-split">Config là dataclass, tham số chạy là keyword riêng</h3>
+<p><code>PPOConfig</code> / <code>DQNConfig</code> chỉ chứa siêu tham số, tức những gì quyết định kết quả và nên ghi vào báo cáo. Các thứ như <code>model</code>, <code>save_path</code>, <code>device</code>, <code>render</code>, <code>watch_every</code> là tham số của <code>train_*</code> vì chúng không đổi kết quả. Đổi lại, gọi hàm dài hơn một chút: <code>train_ppo(PPOConfig(total_steps=...))</code> thay vì <code>train_ppo(total_steps)</code>.</p>
+
+<h3 id="no-torch"><code>import pacman_rl</code> không kéo torch</h3>
+<p><code>__init__.py</code> nạp lười (PEP 562 <code>__getattr__</code>). Mỗi process con của <code>AsyncVectorEnv</code> chỉ cần <code>pacman_rl.envs</code>, nên 16 process không phải nạp torch: khởi động nhanh hơn và đỡ hàng GB RAM. Vì vậy <strong>đừng import torch trong <code>envs/</code></strong>, và đừng để <code>envs/</code> import từ module có torch (<code>agents</code>, <code>models</code>, <code>evaluation</code>...). <code>PipelinedEnvs</code> dùng <code>functools.partial(make_env, ...)</code> thay cho lambda để hàm tạo env pickle được theo tham chiếu.</p>
+
+<h3 id="train-result"><code>TrainResult</code> là NamedTuple</h3>
+<p>Viết <code>model, log, eps = train_ppo(...)</code> (như notebook cũ) vẫn chạy, mà đọc <code>result.episodes</code> cũng rõ nghĩa.</p>
+
+<h3 id="file-format">Định dạng file lưu giữ như notebook</h3>
+<p><code>{name}.pt</code>, <code>{name}_episodes.npy</code>, <code>{name}_log.npy</code>, nên nạp được kết quả đã train trước khi có thư viện. Nhược điểm: không lưu config và optimizer, nên chưa resume train chính xác được.</p>
+
+<h3 id="interrupt">Ctrl+C không làm mất kết quả</h3>
+<p>Vòng lặp bắt <code>KeyboardInterrupt</code>, đóng env, lưu <code>.pt</code> rồi trả về <code>TrainResult</code> của phần đã chạy.</p>
+
+<h3 id="loop-mirror">Vòng train giữ sát bản notebook</h3>
+<p>Mã train được tách từ <code>notebooks/ms_pacman.ipynb</code> gần như nguyên văn (chỉ đổi biến toàn cục thành <code>cfg.*</code> và <code>device</code>). Muốn tối ưu thì đổi sau, khi đã có thư viện để so trước và sau.</p>
+
+<h2 id="future">Nên xem lại khi dự án lớn lên</h2>
+<ul>
+<li><strong>Lưu config cùng run</strong> (ví dụ <code>{name}_config.json</code>) để biết run nào dùng siêu tham số gì khi chạy nhiều cấu hình, nhiều seed.</li>
+<li><strong>Checkpoint đầy đủ</strong> (model, optimizer, bước hiện tại, lịch lr, buffer) để train tiếp đúng chỗ sau khi máy treo. Hiện <code>model=</code> chỉ nạp trọng số.</li>
+<li><strong>Reward có trạng thái</strong> chính xác (phạt "đứng bí" reset theo mất mạng): cần wrapper env hoặc <code>recv</code> trả thêm tín hiệu; xem <a href="../guides/reward-shaping.html#wrapper">Reward shaping</a>.</li>
+<li><strong>Logger chung</strong> (TensorBoard hoặc CSV) thay cho dict, nếu cần theo dõi run dài từ xa.</li>
+<li><strong>Số nhóm <code>n_groups</code></strong> hiện cố định là 2 trong các trainer; có thể đưa lên config.</li>
+</ul>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

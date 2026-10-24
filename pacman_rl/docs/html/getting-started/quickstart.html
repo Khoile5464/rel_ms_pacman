@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chạy thử trong 10 phút · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="getting-started/quickstart.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Bắt đầu</div>
+<h1>Chạy thử trong 10 phút</h1>
+<p class="lead">Train PPO một lần thật ngắn, chấm điểm, vẽ biểu đồ và xem agent chơi. Mục đích là xác nhận cả chuỗi hoạt động, chưa phải để ra một agent giỏi.</p>
+
+<div class="callout note">
+<p class="callout-title">Trước khi bắt đầu</p>
+<p>Đã cài xong theo <a href="installation.html">Cài đặt</a> và môi trường đang bật (ví dụ <code>conda activate rel_pacman</code>). Các lệnh chạy ở thư mục bất kỳ; file lưu vào <code>runs/</code> của thư mục hiện tại.</p>
+</div>
+
+<h2 id="train">Bước 1. Train ngắn</h2>
+<p>50,000 bước là rất ít (cỡ 2.5% so với cấu hình PPO mặc định) nhưng đủ để thấy đường học bắt đầu nhúc nhích:</p>
+<div class="tabs">
+<div class="tab" data-title="Dòng lệnh">
+<pre><code class="language-bash">python -m pacman_rl train ppo --steps 50000 --set log_every=5 --name quick
+</code></pre></div>
+<div class="tab" data-title="Python / notebook">
+<pre><code class="language-python">from pacman_rl import PPOConfig, train_ppo, save_run, get_device
+
+device = get_device()
+cfg = PPOConfig(total_steps=50_000, log_every=5)
+result = train_ppo(cfg, save_path="runs/quick.pt", device=device)
+save_run(result, "runs", "quick")
+</code></pre></div>
+</div>
+<p><code>log_every=5</code> để in log mỗi 5 update (mặc định là 50, quá thưa cho một lần chạy ngắn). Kết quả thật trên một máy RTX 3070 Ti Laptop:</p>
+<pre class="plain"><code>device: cuda | NVIDIA GeForce RTX 3070 Ti Laptop GPU | config: {'total_steps': 50000, 'n_envs': 16, ...}
+PPO: 24 updates x 2048 mẫu = 49,152 bước, 16 env song song
+Update 5/24  | step 10,240 | avg score(20) 214 | viên NL 2  | ma 1  | entropy 2.182 | KL 0.0053 | clipfrac 0.250 | 2388 steps/s
+Update 10/24 | step 20,480 | avg score(20) 278 | viên NL 6  | ma 3  | entropy 2.135 | KL 0.0005 | clipfrac 0.027 | 2549 steps/s
+Update 15/24 | step 30,720 | avg score(20) 326 | viên NL 19 | ma 8  | entropy 2.076 | KL 0.0016 | clipfrac 0.000 | 2569 steps/s
+Update 20/24 | step 40,960 | avg score(20) 450 | viên NL 32 | ma 18 | entropy 2.013 | KL 0.0056 | clipfrac 0.086 | 2635 steps/s
+Update 24/24 | step 49,152 | avg score(20) 510 | viên NL 45 | ma 22 | entropy 1.967 | KL 0.0002 | clipfrac 0.000 | 2603 steps/s
+Đã lưu: ...\runs\quick.pt
+Đã lưu: ...\runs\quick_episodes.npy
+Đã lưu: ...\runs\quick_log.npy</code></pre>
+<p>Cả lần chạy mất khoảng 25 giây trên máy đó; máy bạn sẽ khác. Cách đọc từng cột:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Cột</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>Update 10/24</code></td><td>Đã xong update thứ 10 trên tổng 24. Mỗi update = thu một rollout rồi cập nhật mạng.</td></tr>
+<tr><td><code>step 20,480</code></td><td>Số bước env đã chạy (cộng dồn cả 16 env).</td></tr>
+<tr><td><code>avg score(20)</code></td><td>Điểm thật trung bình của 20 ván (3 mạng) vừa kết thúc gần nhất. In <code>nan</code> khi chưa có ván nào kết thúc.</td></tr>
+<tr><td><code>viên NL</code>, <code>ma</code></td><td>Tổng số viên năng lượng (50 điểm) và ma (200 đến 1600 điểm) đã ăn từ đầu lần train.</td></tr>
+<tr><td><code>entropy</code></td><td>Độ ngẫu nhiên của policy. Khởi đầu khoảng 2.197 (= ln 9, đều trên 9 action) và giảm dần khi agent bắt đầu chắc chắn hơn.</td></tr>
+<tr><td><code>KL</code>, <code>clipfrac</code></td><td>Policy mới lệch bao xa so với policy lúc thu dữ liệu. Xem <a href="../guides/plotting.html#read-ppo">đọc log PPO</a>.</td></tr>
+<tr><td><code>steps/s</code></td><td>Tốc độ thu dữ liệu tính từ lúc bắt đầu.</td></tr>
+</tbody></table></div>
+
+<div class="callout tip">
+<p class="callout-title">Vì sao là 49,152 chứ không phải 50,000?</p>
+<p>Mỗi update dùng <code>n_envs × n_steps = 16 × 128 = 2,048</code> mẫu, và số update là <code>total_steps // 2048 = 24</code>. Phần dư bị bỏ. Quy tắc tương tự ở DQN. Xem <a href="../reference/ppo-config.html#total_steps"><code>total_steps</code></a>.</p>
+</div>
+
+<h2 id="eval">Bước 2. Chấm điểm</h2>
+<pre><code class="language-bash">python -m pacman_rl eval ppo --name quick --episodes 3
+</code></pre>
+<pre class="plain"><code>PPO trên 3 ván: mean 453 | std 191 | max 720
+Điểm: [280, 360, 720]</code></pre>
+<p>Đây là điểm thật của game đầy đủ 3 mạng, dùng seed cố định cho env (1000, 1001, ...), nên mọi model được chấm trên cùng các ván xuất phát. Tuy nhiên PPO mặc định <em>lấy mẫu</em> action từ policy nên điểm vẫn dao động giữa các lần chạy; thêm <code>--greedy</code> nếu muốn kết quả ổn định hơn. Xem <a href="../guides/evaluation.html">Đánh giá</a>.</p>
+
+<h2 id="plot">Bước 3. Vẽ biểu đồ</h2>
+<pre><code class="language-bash">python -m pacman_rl plot ppo:quick --out quick.png
+</code></pre>
+<figure>
+<img src="../assets/img/quickstart-curves.png" alt="Ba biểu đồ: điểm theo bước, entropy của policy, tỷ lệ ma trên viên năng lượng" style="width:100%;border:1px solid var(--border);border-radius:14px">
+<figcaption>Ảnh thật do lệnh trên tạo ra. Trái: điểm từng ván (chấm mờ) và trung bình trượt 20 ván. Giữa: entropy giảm dần. Phải: trống ý nghĩa vì lần chạy quá ngắn.</figcaption>
+</figure>
+<div class="callout warn">
+<p class="callout-title">Biểu đồ thứ ba gần như vô nghĩa với run ngắn</p>
+<p>Nó chia số lần ăn ma cho số viên năng lượng theo từng khoảng 100,000 bước. Run 50,000 bước chỉ có một khoảng nên đường thẳng trơ trọi như trên. Với run từ vài trăm nghìn bước trở lên thì đọc bình thường.</p>
+</div>
+
+<h2 id="watch">Bước 4. Xem agent chơi</h2>
+<pre><code class="language-bash">python -m pacman_rl play ppo --name quick --episodes 2
+</code></pre>
+<p>Lệnh này mở cửa sổ game nên cần có màn hình. Sau 50,000 bước agent còn chơi khá vụng; xem để chắc rằng pipeline từ model tới màn hình hoạt động.</p>
+
+<h2 id="next">Làm gì tiếp theo</h2>
+<ul>
+<li>Train thật: <a href="../guides/training.html">Setup và chạy huấn luyện</a> (mặc định PPO 2 triệu bước, DQN 10 triệu bước).</li>
+<li>Hiểu các cột log và tham số: <a href="../reference/ppo-config.html">PPOConfig</a>, <a href="../reference/dqn-config.html">DQNConfig</a>.</li>
+<li>Vì sao có 16 env mà chỉ một policy: <a href="../concepts/parallel-envs.html">Env song song và pipeline</a>.</li>
+</ul>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

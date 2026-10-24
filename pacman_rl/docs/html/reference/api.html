@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Python · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="reference/api.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Tham chiếu</div>
+<h1>API Python</h1>
+<p class="lead">Mọi hàm và lớp công khai, nhóm theo module. Phần lớn có thể import thẳng từ <code>pacman_rl</code>; riêng biểu đồ nằm ở <code>pacman_rl.plotting</code>.</p>
+
+<h2 id="imports">Cách import</h2>
+<pre><code class="language-python"># nạp lười: `import pacman_rl` không kéo torch, chỉ khi dùng đến tên bên dưới mới nạp module chứa nó
+from pacman_rl import (
+    PPOConfig, train_ppo, DQNConfig, train_dqn, TrainResult,       # agents
+    ActorCriticCNN, QNetwork,                                      # models
+    evaluate, watch, run_episodes, random_baseline,                # evaluation
+    ppo_policy, dqn_policy,
+    save_run, load_run, load_model,                                # runs
+    get_device, describe_device, set_seed, moving_avg,             # utils
+    make_env, PipelinedEnvs, EpisodicLife, log_reward, count_events, ENV_ID, N_ACTIONS,   # envs
+)
+from pacman_rl.plotting import plot_training, plot_scores, plot_metric, plot_events, plot_eval
+</code></pre>
+<div class="callout note">
+<p class="callout-title">Một "policy" là gì</p>
+<p>Ở nhiều chỗ (<code>evaluate</code>, <code>watch</code>) "policy" là một hàm <code>act_fn(obs) -> int</code>, trong đó <code>obs</code> là mảng numpy <code>uint8</code> hình <code>(4, 84, 84)</code> và kết quả là chỉ số action 0 đến 8. Tự viết hàm như vậy (luật cứng, mạng khác...) là đủ để dùng với mọi hàm đánh giá.</p>
+</div>
+
+<h2 id="agents">pacman_rl.agents</h2>
+
+<h3 id="train_ppo"><code>train_ppo</code></h3>
+<pre class="plain"><code>train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False,
+          watch_every=0, watch_episodes=1) -&gt; TrainResult</code></pre>
+<p>Train PPO. Tham số là <a href="ppo-config.html"><code>PPOConfig</code></a> (siêu tham số) và các tùy chọn chạy:</p>
+<ul>
+<li><code>model</code>: <code>ActorCriticCNN</code> có sẵn để train tiếp; <code>None</code> thì tạo mới.</li>
+<li><code>save_path</code>: file <code>.pt</code> lưu giữa chừng (mỗi <code>save_every</code> update) và lúc kết thúc.</li>
+<li><code>device</code>: <code>torch.device</code>; <code>None</code> thì <code>get_device()</code>.</li>
+<li><code>render</code>: env số 0 mở cửa sổ, tất cả env chạy tuần tự.</li>
+<li><code>watch_every</code>, <code>watch_episodes</code>: cứ mỗi <code>watch_every</code> bước env, mở cửa sổ cho agent chơi <code>watch_episodes</code> ván.</li>
+</ul>
+<p>Bắt <code>KeyboardInterrupt</code>: vẫn đóng env, lưu <code>.pt</code> và trả về phần đã train.</p>
+
+<h3 id="train_dqn"><code>train_dqn</code></h3>
+<pre class="plain"><code>train_dqn(cfg=None, *, model=None, save_path=None, device=None, render=False,
+          watch_every=0, watch_episodes=1) -&gt; TrainResult</code></pre>
+<p>Train DQN, tham số giống <code>train_ppo</code> (với <a href="dqn-config.html"><code>DQNConfig</code></a> và <code>model</code> là <code>QNetwork</code>). Checkpoint lưu mỗi <code>save_every</code> <em>bước env</em>.</p>
+
+<h3 id="TrainResult"><code>TrainResult</code></h3>
+<pre class="plain"><code>class TrainResult(NamedTuple):
+    model: nn.Module     # mạng đã train
+    log: dict            # tên chỉ số -&gt; list, cùng độ dài với log["step"]
+    episodes: list       # [(bước env, điểm thật của cả ván 3 mạng), ...]</code></pre>
+<p>Unpack như tuple được: <code>model, log, episodes = train_ppo(...)</code>. Ý nghĩa các khóa trong <code>log</code> ở <a href="files-and-logs.html#log-keys">File lưu và log</a>.</p>
+
+<h3 id="VecFrameReplayBuffer"><code>VecFrameReplayBuffer</code></h3>
+<pre class="plain"><code>VecFrameReplayBuffer(capacity, n_envs, device="cpu")
+  .add(obs, action, reward, done, is_first)   # mỗi tham số có độ dài n_envs; obs (n_envs,4,84,84)
+  .sample(batch_size) -&gt; (s, a, r, s2, done) # tensor trên device
+  len(buffer)                                  # số mẫu hiện có</code></pre>
+<p>Replay buffer của DQN: lưu frame mới nhất mỗi bước, dựng lại chồng 4 frame khi rút mẫu. Giải thích ở <a href="../concepts/dqn.html#buffer">DQN trong pacman_rl</a>.</p>
+
+<h3 id="ALGOS"><code>ALGOS</code></h3>
+<p>Dict <code>{"ppo": (PPOConfig, train_ppo), "dqn": (DQNConfig, train_dqn)}</code>. CLI tra cứu thuật toán qua đây; đăng ký thuật toán mới vào đây để dòng lệnh dùng được (xem <a href="../contributing/add-algorithm.html">Thêm thuật toán mới</a>).</p>
+
+<h2 id="models">pacman_rl.models</h2>
+
+<h3 id="ActorCriticCNN"><code>ActorCriticCNN</code></h3>
+<pre class="plain"><code>ActorCriticCNN(n_actions)
+  .forward(x: uint8 (B,4,84,84)) -&gt; (Categorical, value (B,))
+  .act(x)                       -&gt; (action (B,), log_prob (B,), value (B,))   # @no_grad, lấy mẫu Gumbel-max</code></pre>
+<p>Mạng của PPO: thân CNN kiểu Nature DQN dùng chung, đầu <code>actor</code> (logit) và đầu <code>critic</code> (giá trị).</p>
+
+<h3 id="QNetwork"><code>QNetwork</code></h3>
+<pre class="plain"><code>QNetwork(n_actions)
+  .forward(x: uint8 (B,4,84,84)) -&gt; Q (B, n_actions)
+  .head                           # nn.Linear(512, n_actions)</code></pre>
+<p>Mạng của DQN: cùng thân CNN, đầu ra là giá trị Q cho từng action.</p>
+
+<h3 id="make_cnn"><code>make_cnn</code> và <code>MODEL_CLASSES</code></h3>
+<p><code>make_cnn()</code> trả về thân CNN (<code>Conv32-8x8/4, Conv64-4x4/2, Conv64-3x3/1, Linear512</code>), dùng chung cho cả hai mạng. <code>MODEL_CLASSES = {"ppo": ActorCriticCNN, "dqn": QNetwork}</code> dùng để nạp lại mạng đúng loại từ tên thuật toán.</p>
+
+<h2 id="envs">pacman_rl.envs</h2>
+<p>Gói này không import torch (xem <a href="../contributing/architecture.html#no-torch">Kiến trúc</a>).</p>
+
+<h3 id="make_env"><code>make_env</code></h3>
+<pre class="plain"><code>make_env(render_mode=None, episodic_life=False) -&gt; gymnasium.Env</code></pre>
+<p>Tạo một env đã tiền xử lý (frame-skip 4, xám, 84x84, noop reset tối đa 30, chồng 4 frame). <code>episodic_life=True</code> chỉ dùng khi học. <code>render_mode="human"</code> để mở cửa sổ.</p>
+
+<h3 id="PipelinedEnvs"><code>PipelinedEnvs</code></h3>
+<pre class="plain"><code>PipelinedEnvs(n_envs, n_groups=2, render=False)
+  .reset(seed=0)        -&gt; obs (n_envs,4,84,84)
+  .send(g, actions)     # gửi action cho nhóm g, trả về ngay (step_async)
+  .recv(g)              -&gt; (obs, reward_thật, done, danh_sách_điểm_ván_vừa_kết_thúc)
+  .close()
+  # thuộc tính: G (số nhóm), gs (env mỗi nhóm), n (tổng env), slices, n_actions, envs</code></pre>
+<p>Vector env cho việc học, chia thành <code>n_groups</code> nhóm để chạy xen kẽ với GPU. <code>n_envs</code> phải chia hết cho <code>n_groups</code>. Hai trình train hiện luôn dùng 2 nhóm. Xem <a href="../concepts/parallel-envs.html">Env song song và pipeline</a>.</p>
+
+<h3 id="EpisodicLife"><code>EpisodicLife</code></h3>
+<p><code>gym.Wrapper</code>: mất mạng thì báo <code>terminated=True</code>; chỉ reset game thật khi hết mạng; ghi <code>info["game_score"]</code> khi hết cả ván.</p>
+
+<h3 id="reward-helpers"><code>log_reward</code>, <code>count_events</code>, <code>pop_game_scores</code></h3>
+<pre class="plain"><code>log_reward(r) -&gt; np.ndarray             # log1p(r / 10), float32
+count_events(reward) -&gt; (n_pellet, n_ghost)
+pop_game_scores(infos) -&gt; list[float]    # điểm các ván vừa kết thúc hẳn, từ info của vector env</code></pre>
+<p>Hằng số: <code>ENV_ID</code>, <code>N_ACTIONS</code> (9), <code>OBS_SHAPE</code> ((4,84,84)), <code>PELLET_REWARD</code> (50), <code>GHOST_REWARDS</code> ((200,400,800,1600)). Ý nghĩa ở <a href="../concepts/environment.html">Môi trường và các loại điểm</a>.</p>
+
+<h2 id="evaluation">pacman_rl.evaluation</h2>
+
+<h3 id="ppo_policy"><code>ppo_policy</code>, <code>dqn_policy</code>, <code>random_policy</code></h3>
+<pre class="plain"><code>ppo_policy(model, device, greedy=False)   -&gt; act_fn
+dqn_policy(model, device, eps=0.05)       -&gt; act_fn
+random_policy(n_actions)                  -&gt; act_fn</code></pre>
+<ul>
+<li><code>ppo_policy</code>: <code>greedy=False</code> lấy mẫu từ policy (giống lúc train); <code>greedy=True</code> luôn chọn action xác suất cao nhất.</li>
+<li><code>dqn_policy</code>: epsilon-greedy với <code>eps</code> nhỏ để tránh kẹt.</li>
+</ul>
+
+<h3 id="evaluate"><code>evaluate</code>, <code>watch</code>, <code>run_episodes</code>, <code>random_baseline</code></h3>
+<pre class="plain"><code>evaluate(act_fn, n_episodes=10, max_steps=4500, seed=1000)  -&gt; list[float]
+watch(act_fn, episodes=2, max_steps=4500)                   -&gt; list[float]     # mở cửa sổ
+run_episodes(act_fn, n_episodes=10, max_steps=4500, seed=None,
+             render_mode=None, verbose=False)               -&gt; list[float]
+random_baseline(n_episodes=5, n_actions=9)                  -&gt; list[float]</code></pre>
+<ul>
+<li>Tất cả chạy game đầy đủ 3 mạng và trả về danh sách <strong>điểm thật</strong> mỗi ván.</li>
+<li><code>seed=None</code>: mỗi ván ngẫu nhiên. <code>seed=k</code>: ván thứ <code>i</code> dùng seed <code>k + i</code>.</li>
+<li><code>max_steps</code> giới hạn số bước (action) mỗi ván; ván bị cắt vẫn tính điểm đã có.</li>
+<li><code>random_baseline</code> không giới hạn bước, seed cố định 0: cho biết "không học gì" đạt bao nhiêu.</li>
+</ul>
+
+<h2 id="runs">pacman_rl.runs</h2>
+<pre class="plain"><code>save_run(result, directory, name)            -&gt; (path_model, path_episodes, path_log)
+load_run(directory, name, algo, device="cpu") -&gt; TrainResult
+load_model(path, algo, device="cpu", n_actions=N_ACTIONS) -&gt; nn.Module  # chế độ eval
+run_paths(directory, name)                   -&gt; (path_model, path_episodes, path_log)</code></pre>
+<p><code>algo</code> là <code>"ppo"</code> hoặc <code>"dqn"</code>. <code>load_run</code> chấp nhận thiếu file log/episodes (trả về rỗng, chỉ còn model). Định dạng file ở <a href="files-and-logs.html#files">File lưu và log</a>.</p>
+
+<h2 id="plotting">pacman_rl.plotting</h2>
+<p>Mọi hàm nhận <code>runs</code>: dict <em>tên → TrainResult</em> (hoặc tuple <code>(model, log, episodes)</code>), nên vẽ một hay nhiều run đều cùng một cách. Nhiều hàm nhận <code>ax=</code> / <code>axes=</code> để ghép vào figure của bạn.</p>
+<pre class="plain"><code>plot_training(runs, random_scores=None, save_path=None, show=True) -&gt; Figure   # 3 biểu đồ tổng hợp
+plot_scores(runs, random_scores=None, w=20, ax=None)     # điểm từng ván + trung bình trượt w ván
+plot_metric(runs, key, title=None, ax=None)              # một chỉ số bất kỳ trong log
+plot_events(runs, total=None, bin_size=100_000, axes=None)   # viên năng lượng / ma / tỷ lệ
+plot_eval(results, save_path=None, show=True) -&gt; Figure   # boxplot điểm đánh giá; in bảng mean/std/max
+score_curve(episodes, w=20) -&gt; (steps, avg)               # dữ liệu cho đường trung bình trượt
+events_per_bin(log, total=None, bin_size=100_000)        # sự kiện trong mỗi khoảng bin_size bước</code></pre>
+
+<h2 id="utils">pacman_rl.utils</h2>
+<pre class="plain"><code>get_device(prefer_cuda=True) -&gt; torch.device    # cuda nếu có; bật TF32 và cuDNN benchmark
+describe_device(device) -&gt; str                  # "cuda | tên GPU" hoặc "cpu | CPU"
+set_seed(seed)                                  # random, numpy, torch
+moving_avg(x, w) -&gt; np.ndarray                  # trung bình trượt, chế độ "valid"</code></pre>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

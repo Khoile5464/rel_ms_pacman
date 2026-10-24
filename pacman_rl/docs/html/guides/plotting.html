@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vẽ biểu đồ, đọc log · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="guides/plotting.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Hướng dẫn</div>
+<h1>Vẽ biểu đồ, đọc log</h1>
+<p class="lead">Vẽ đường học của một hay nhiều run, và quan trọng hơn: biết mỗi con số nói gì để phát hiện run hỏng sớm, trước khi tốn hàng giờ.</p>
+
+<h2 id="quick">Vẽ nhanh</h2>
+<div class="tabs">
+<div class="tab" data-title="Dòng lệnh">
+<pre><code class="language-bash">python -m pacman_rl plot ppo dqn --out curves.png
+python -m pacman_rl plot ppo:base_s0 ppo:penalty_s0 --out compare.png
+</code></pre></div>
+<div class="tab" data-title="Python">
+<pre><code class="language-python">from pacman_rl import load_run, random_baseline
+from pacman_rl.plotting import plot_training, plot_events, plot_metric
+
+runs = {"PPO": load_run("runs", "ms_pacman_ppo", "ppo"),
+        "DQN": load_run("runs", "ms_pacman_dqn", "dqn")}
+plot_training(runs, random_scores=random_baseline(5), save_path="curves.png")
+plot_events(runs)                  # viên năng lượng / ma ăn được mỗi 100k bước
+plot_metric(runs, "q_mean")        # một chỉ số bất kỳ trong log; run nào không có thì bỏ qua
+</code></pre></div>
+</div>
+<p><code>runs</code> là dict <em>nhãn → TrainResult</em>. Một run hay nhiều run, PPO hay DQN đều cùng cách. Danh sách hàm vẽ: <a href="../reference/api.html#plotting">API plotting</a>. Mỗi hàm <code>plot_*</code> nhỏ nhận <code>ax=</code> để ghép vào figure của bạn.</p>
+
+<h2 id="default">Ba biểu đồ mặc định</h2>
+<figure>
+<img src="../assets/img/quickstart-curves.png" alt="Ba biểu đồ mặc định của plot_training" style="width:100%;border:1px solid var(--border);border-radius:14px">
+<figcaption>Ảnh thật từ một run PPO 50,000 bước. Run này quá ngắn nên biểu đồ phải trống ý nghĩa; ba biểu đồ có đầy đủ nội dung khi run dài hơn.</figcaption>
+</figure>
+<div class="table-wrap"><table>
+<thead><tr><th>Biểu đồ</th><th>Hiển thị</th><th>Đọc thế nào</th></tr></thead>
+<tbody>
+<tr><td><strong>Điểm theo số bước</strong></td><td>Chấm mờ: điểm từng ván. Đường: trung bình trượt 20 ván.</td><td>Đường đi lên là agent đang học. Chấm mờ rải rộng là bình thường: điểm mỗi ván dao động lớn.</td></tr>
+<tr><td><strong>Entropy (PPO)</strong></td><td>Độ ngẫu nhiên của policy.</td><td>Xem <a href="#read-ppo">Đọc log PPO</a>. DQN không có chỉ số này nên không xuất hiện.</td></tr>
+<tr><td><strong>Ma ăn trên viên năng lượng</strong></td><td>Tỷ lệ số ma / số viên năng lượng ăn được, theo từng khoảng 100,000 bước.</td><td>Đo xem agent có biết "ăn viên năng lượng rồi đuổi ma" không. Chỉ có ý nghĩa với run từ vài trăm nghìn bước trở lên.</td></tr>
+</tbody></table></div>
+
+<div class="callout warn">
+<p class="callout-title">Run ngắn làm biểu đồ thứ ba vô nghĩa</p>
+<p>Biểu đồ chia theo khoảng 100,000 bước (<code>bin_size</code>). Run dưới 100,000 bước chỉ có một khoảng nên không có đường để vẽ. Dùng <code>plot_events(runs, bin_size=10_000)</code> cho run ngắn.</p>
+</div>
+
+<h2 id="read-ppo">Đọc log PPO</h2>
+<p>Các chỉ số này được ghi mỗi update, lấy từ minibatch cuối cùng, nên gợn sóng là bình thường; hãy nhìn <em>xu hướng</em>.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Chỉ số</th><th>Nó đo gì</th><th>Dấu hiệu khỏe</th><th>Dấu hiệu đáng ngờ</th></tr></thead>
+<tbody>
+<tr><td><code>ent</code> (entropy)</td><td>Độ ngẫu nhiên của policy. Tối đa <code>ln 9 ≈ 2.197</code>.</td><td>Bắt đầu quanh 2.2, giảm dần và đều theo thời gian.</td><td>Đứng yên ≈ 2.19 mãi: học quá chậm hoặc <code>c2</code> quá lớn. Sụt gần 0 rất sớm: chốt sớm, thiếu khám phá.</td></tr>
+<tr><td><code>kl</code></td><td>Policy mới lệch bao xa so với policy lúc thu dữ liệu (xấp xỉ). Có thể âm nhẹ do nhiễu.</td><td>Nhỏ, cỡ vài phần nghìn đến vài phần trăm.</td><td>Thường xuyên lớn (khoảng &gt; 0.05): update quá mạnh.</td></tr>
+<tr><td><code>clipfrac</code></td><td>Tỷ lệ mẫu mà tỷ lệ policy bị cắt bởi <code>clip_eps</code>.</td><td>Từ 0 đến khoảng 0.2, dao động.</td><td>Thường xuyên trên 0.3: bước quá lớn. Luôn bằng 0 và học chậm: bước quá rụt rè.</td></tr>
+<tr><td><code>v_loss</code></td><td>Sai số dự đoán giá trị của critic.</td><td>Giảm dần hoặc ổn định theo thời gian.</td><td>Rất lớn, tăng, hoặc có những cú nhảy.</td></tr>
+<tr><td><code>pg_loss</code></td><td>Policy loss.</td><td>Dao động quanh 0 (không đơn điệu giảm).</td><td>Ít thông tin riêng lẻ; chỉ để ý khi nó mất ổn định cùng chỉ số khác.</td></tr>
+</tbody></table></div>
+<p>Ngưỡng ở cột cuối là kinh nghiệm thô để biết khi nào nên để ý. Gợi ý xử lý từng triệu chứng ở <a href="hyperparameters.html#ppo-symptoms">Chọn và chỉnh tham số</a>.</p>
+
+<h2 id="read-dqn">Đọc log DQN</h2>
+<p>Các chỉ số được ghi mỗi <code>log_every</code> bước env; <code>loss</code> và <code>q_mean</code> là trung bình từ lần ghi trước.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Chỉ số</th><th>Nó đo gì</th><th>Dấu hiệu khỏe</th><th>Dấu hiệu đáng ngờ</th></tr></thead>
+<tbody>
+<tr><td><code>eps</code></td><td>Xác suất chọn action ngẫu nhiên.</td><td>Giảm tuyến tính từ <code>eps_start</code> về <code>eps_end</code> rồi phẳng.</td><td>Không đổi (thường do <code>total_steps</code> quá nhỏ hoặc <code>eps_frac</code> sai).</td></tr>
+<tr><td><code>loss</code></td><td>Huber loss giữa Q và mục tiêu Bellman.</td><td>Dao động ở mức thấp, tăng nhẹ theo thời gian cũng thường gặp (mục tiêu khó dần).</td><td>Nhảy lớn đột ngột, hoặc <code>nan</code> sau khi đã bắt đầu học.</td></tr>
+<tr><td><code>q_mean</code></td><td>Giá trị Q trung bình của các action đã chọn (đơn vị của <em>reward học</em>, không phải điểm).</td><td>Tăng dần và chậm khi agent học được.</td><td>Tăng vô độ (phân kỳ, Q quá cao), hoặc bằng 0 mãi.</td></tr>
+</tbody></table></div>
+<p><code>loss</code> và <code>q_mean</code> là <code>nan</code> ở các điểm log đầu tiên, trước <code>learning_starts</code>, vì chưa học lần nào; không phải lỗi.</p>
+
+<h2 id="read-events">Đọc chỉ số ăn viên năng lượng và ma</h2>
+<p><code>pellets</code> và <code>ghosts</code> trong log là tổng <em>tích lũy</em> từ đầu run. <code>plot_events</code> đổi thành số lượng trong mỗi khoảng <code>bin_size</code> bước để dễ thấy xu hướng:</p>
+<ul>
+<li><strong>Viên năng lượng / khoảng</strong> tăng: agent tìm tới các viên năng lượng thường xuyên hơn.</li>
+<li><strong>Ma / khoảng</strong> tăng: agent biết ăn ma khi ma sợ hãi.</li>
+<li><strong>Ma trên viên năng lượng</strong>: mỗi viên cho phép ăn tối đa 4 con ma liên tiếp (200, 400, 800, 1600). Tỷ lệ tăng nghĩa là agent khai thác tốt hơn mỗi viên.</li>
+</ul>
+<p>Đây là phép đếm gần đúng (xem <a href="../concepts/environment.html#count-events">Đếm viên năng lượng và ma</a>). Dùng để thấy <em>xu hướng</em>, không phải để kiểm toán.</p>
+
+<h2 id="compare">So sánh nhiều run</h2>
+<p>Đưa nhiều run vào cùng <code>runs</code>, nhãn là tên bạn đặt:</p>
+<pre><code class="language-python">runs = {"base": load_run("runs", "ppo_base_s0", "ppo"),
+        "c2=0.02": load_run("runs", "ppo_c2_0.02_s0", "ppo")}
+plot_training(runs, save_path="compare.png")
+</code></pre>
+
+<h3 id="seeds">Trung bình nhiều seed</h3>
+<p>Một run đơn lẻ không đủ tin cậy. Đoạn sau nội suy đường trung bình trượt của từng seed về cùng một trục bước rồi vẽ trung bình kèm dải ±1 độ lệch chuẩn:</p>
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+from pacman_rl import load_run
+from pacman_rl.plotting import score_curve
+
+grid = np.linspace(0, 2_000_000, 200)                   # trục bước chung cho mọi seed
+curves = []
+for s in (0, 1, 2):
+    r = load_run("runs", f"ppo_base_s{s}", "ppo")
+    x, y = score_curve(r.episodes, w=20)
+    curves.append(np.interp(grid, x, y))                # nội suy về cùng trục
+mean, std = np.mean(curves, axis=0), np.std(curves, axis=0)
+
+plt.plot(grid, mean, label="base (3 seed)")
+plt.fill_between(grid, mean - std, mean + std, alpha=0.2)
+plt.xlabel("Bước env"); plt.ylabel("Điểm (TB trượt 20 ván)"); plt.legend()
+plt.savefig("seeds.png", dpi=150)
+</code></pre>
+<div class="callout note">
+<p class="callout-title">Lưu ý về đầu đường cong</p>
+<p><code>score_curve</code> chỉ có điểm từ ván thứ 20 trở đi, và <code>np.interp</code> kéo dài giá trị đầu về phía trước. Đoạn đầu của đường trung bình vì vậy phẳng; đừng đọc nó như tín hiệu.</p>
+</div>
+
+<h2 id="own-metrics">Vẽ chỉ số của riêng bạn</h2>
+<pre><code class="language-python">import matplotlib.pyplot as plt
+fig, ax = plt.subplots(1, 2, figsize=(11, 4))
+plot_metric(runs, "kl", "KL", ax=ax[0])
+plot_metric(runs, "clipfrac", "Tỷ lệ bị cắt", ax=ax[1])
+fig.savefig("diagnostics.png", dpi=150)
+</code></pre>
+<p>Thêm chỉ số mới vào log để vẽ được: <a href="../contributing/extend-components.html#add-metric">Thêm chỉ số vào log</a>.</p>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

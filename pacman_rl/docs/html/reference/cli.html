@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dòng lệnh (CLI) · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="reference/cli.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Tham chiếu</div>
+<h1>Dòng lệnh (CLI)</h1>
+<p class="lead">Bốn lệnh con: <code>train</code>, <code>eval</code>, <code>play</code>, <code>plot</code>. Chạy được ở thư mục bất kỳ khi môi trường đang bật.</p>
+
+<pre><code class="language-bash">python -m pacman_rl &lt;lệnh&gt; [tùy chọn]
+pacman-rl &lt;lệnh&gt; [tùy chọn]          # tương đương
+python -m pacman_rl &lt;lệnh&gt; -h        # xem đủ tùy chọn của một lệnh
+</code></pre>
+<p>Quy ước chung: <code>algo</code> là <code>ppo</code> hoặc <code>dqn</code>. Thư mục mặc định cho mọi file là <code>runs/</code> của thư mục hiện tại. Tên run mặc định là <code>ms_pacman_&lt;algo&gt;</code>.</p>
+
+<h2 id="train"><code>train</code></h2>
+<pre><code class="language-bash">python -m pacman_rl train &lt;algo&gt; [--steps N] [--seed S] [--out DIR] [--name NAME]
+                                [--set KEY=VALUE ...] [--render] [--watch-every N]
+</code></pre>
+<div class="table-wrap"><table>
+<thead><tr><th>Tùy chọn</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>algo</code></td><td>bắt buộc</td><td><code>ppo</code> hoặc <code>dqn</code></td></tr>
+<tr><td><code>--steps N</code></td><td>theo config</td><td>Tổng số bước env. Đè lên <code>total_steps</code> kể cả khi <code>--set total_steps=...</code> cũng có mặt.</td></tr>
+<tr><td><code>--seed S</code></td><td>0</td><td>Seed. Luôn đè lên <code>--set seed=...</code>.</td></tr>
+<tr><td><code>--out DIR</code></td><td><code>runs</code></td><td>Thư mục lưu kết quả (tự tạo nếu chưa có).</td></tr>
+<tr><td><code>--name NAME</code></td><td><code>ms_pacman_&lt;algo&gt;</code></td><td>Tên run; quyết định tên 3 file lưu. Trùng tên là ghi đè.</td></tr>
+<tr><td><code>--set KEY=VALUE ...</code></td><td>-</td><td>Ghi đè siêu tham số, có thể nhiều cặp cách nhau bằng dấu cách.</td></tr>
+<tr><td><code>--render</code></td><td>tắt</td><td>Mở cửa sổ game ở env số 0; tất cả env chạy tuần tự nên rất chậm.</td></tr>
+<tr><td><code>--watch-every N</code></td><td>0 (tắt)</td><td>Cứ mỗi N bước env, mở cửa sổ cho agent chơi 1 ván.</td></tr>
+</tbody></table></div>
+
+<h3 id="set">Cú pháp <code>--set</code></h3>
+<ul>
+<li>Mỗi cặp dạng <code>tên=giá trị</code>, không có dấu cách quanh dấu <code>=</code>.</li>
+<li>Giá trị được ép kiểu theo kiểu của tham số: trường <code>int</code> nhận cả dạng khoa học (<code>total_steps=2e6</code>, <code>buffer_size=5e5</code>); trường <code>float</code> nhận <code>1e-4</code>, <code>0.02</code>.</li>
+<li>Tên không tồn tại sẽ dừng với thông báo liệt kê các tham số hợp lệ.</li>
+<li><code>reward_fn</code> không đặt được từ CLI.</li>
+<li>Các tham số hợp lệ: xem <a href="ppo-config.html">PPOConfig</a> và <a href="dqn-config.html">DQNConfig</a>. Hai bộ khác nhau, tham số của DQN không dùng được cho PPO và ngược lại.</li>
+</ul>
+
+<h3 id="train-examples">Ví dụ</h3>
+<pre><code class="language-bash">python -m pacman_rl train ppo --steps 2000000
+python -m pacman_rl train dqn --steps 10000000 --seed 1 --name dqn_seed1
+python -m pacman_rl train ppo --set lr=1e-4 n_envs=8 n_steps=256 c2=0.02
+python -m pacman_rl train ppo --watch-every 500000
+</code></pre>
+<p>Đầu ra: dòng <code>device: ... | config: {...}</code> (in ra toàn bộ cấu hình thực tế), các dòng log, rồi đường dẫn ba file đã lưu.</p>
+
+<h2 id="eval"><code>eval</code></h2>
+<p>Chấm điểm một model đã lưu trên các ván đầy đủ 3 mạng, không mở cửa sổ.</p>
+<pre><code class="language-bash">python -m pacman_rl eval &lt;algo&gt; [--dir DIR] [--name NAME] [--episodes N] [--seed S]
+                               [--greedy] [--eps E]
+</code></pre>
+<div class="table-wrap"><table>
+<thead><tr><th>Tùy chọn</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>--dir DIR</code></td><td><code>runs</code></td><td>Thư mục chứa run.</td></tr>
+<tr><td><code>--name NAME</code></td><td><code>ms_pacman_&lt;algo&gt;</code></td><td>Tên run cần nạp (file <code>NAME.pt</code>).</td></tr>
+<tr><td><code>--episodes N</code></td><td>10</td><td>Số ván chấm điểm.</td></tr>
+<tr><td><code>--seed S</code></td><td>1000</td><td>Ván thứ <code>i</code> dùng seed <code>S + i</code>.</td></tr>
+<tr><td><code>--greedy</code></td><td>tắt</td><td><strong>Chỉ PPO.</strong> Chọn action có xác suất cao nhất thay vì lấy mẫu.</td></tr>
+<tr><td><code>--eps E</code></td><td>0.05</td><td><strong>Chỉ DQN.</strong> Epsilon khi chơi.</td></tr>
+</tbody></table></div>
+<pre class="plain"><code>PPO trên 3 ván: mean 453 | std 191 | max 720
+Điểm: [280, 360, 720]</code></pre>
+
+<h2 id="play"><code>play</code></h2>
+<p>Mở cửa sổ game để xem model chơi (cần màn hình). Tùy chọn giống <code>eval</code> trừ <code>--seed</code> (không có) và <code>--episodes</code> mặc định 2.</p>
+<pre><code class="language-bash">python -m pacman_rl play ppo --greedy --episodes 3
+python -m pacman_rl play dqn --name dqn_seed1 --eps 0.01
+</code></pre>
+
+<h2 id="plot"><code>plot</code></h2>
+<p>Vẽ đường học từ các run đã lưu ra file PNG (không mở cửa sổ).</p>
+<pre><code class="language-bash">python -m pacman_rl plot &lt;ALGO[:NAME]&gt; ... [--dir DIR] [--out FILE]
+</code></pre>
+<div class="table-wrap"><table>
+<thead><tr><th>Tùy chọn</th><th>Mặc định</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>ALGO[:NAME]</code></td><td>bắt buộc, một hoặc nhiều</td><td><code>ppo</code> hoặc <code>ppo:ten_run</code>. <code>ALGO</code> cho biết loại mạng khi nạp; <code>NAME</code> là tên run (bỏ qua thì dùng <code>ms_pacman_&lt;algo&gt;</code>).</td></tr>
+<tr><td><code>--dir DIR</code></td><td><code>runs</code></td><td>Thư mục chứa các run (dùng chung cho mọi run trong lệnh).</td></tr>
+<tr><td><code>--out FILE</code></td><td><code>curves.png</code></td><td>File ảnh đầu ra.</td></tr>
+</tbody></table></div>
+<p>Nhãn trong biểu đồ là <code>NAME</code> nếu có, không thì <code>PPO</code>/<code>DQN</code>. Màu cố định chỉ áp dụng cho nhãn <code>PPO</code>/<code>DQN</code> (xanh dương, cam); nhãn khác lấy màu theo thứ tự.</p>
+<pre><code class="language-bash">python -m pacman_rl plot ppo dqn --out curves.png
+python -m pacman_rl plot ppo:base_s0 ppo:penalty_s0 --out compare.png
+python -m pacman_rl plot ppo:ms_pacman_ppo --dir ../notebooks      # nạp từ thư mục khác
+</code></pre>
+<p>Ảnh gồm ba biểu đồ: điểm theo bước, entropy (PPO), và số ma ăn trên mỗi viên năng lượng. Cách đọc ở <a href="../guides/plotting.html">Vẽ biểu đồ, đọc log</a>.</p>
+
+<div class="callout note">
+<p class="callout-title">Những thứ chỉ làm được bằng Python</p>
+<p>Truyền <code>model=</code> để train tiếp, <code>reward_fn</code> tự viết, <code>watch_episodes</code>, vẽ riêng từng biểu đồ, và <code>random_baseline</code> trong biểu đồ. Xem <a href="api.html">API Python</a>.</p>
+</div>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

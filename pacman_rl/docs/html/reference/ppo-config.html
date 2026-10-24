@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPOConfig · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="reference/ppo-config.html" data-cfg="PPOConfig">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Tham chiếu</div>
+<h1>PPOConfig</h1>
+<p class="lead">Mọi siêu tham số của <code>train_ppo</code>: mỗi tham số cho biết nó là gì, đơn vị, nó điều khiển phần nào của thuật toán, tăng hay giảm thì có xu hướng gì, và khi nào nên chỉnh.</p>
+
+<pre><code class="language-python">from pacman_rl import PPOConfig
+
+cfg = PPOConfig(total_steps=2_000_000, n_envs=16, lr=2.5e-4)   # chỉ ghi các trường muốn đổi
+</code></pre>
+<p>Các cột "Tăng / Giảm" mô tả <strong>xu hướng chung</strong> trong RL, không phải kết quả đo riêng trên dự án này. Hãy xác nhận bằng nhiều seed (xem <a href="../guides/training.html#multi-run">Chạy nhiều seed</a>). Thuật toán được giải thích ở <a href="../concepts/ppo.html">PPO trong pacman_rl</a>.</p>
+
+<h2 id="summary">Bảng tóm tắt</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Tham số</th><th>Mặc định</th><th>Nhóm</th><th>Một dòng</th></tr></thead>
+<tbody>
+<tr><td><a href="#total_steps"><code>total_steps</code></a></td><td class="num">2,000,000</td><td>Quy mô</td><td>Tổng số bước env</td></tr>
+<tr><td><a href="#n_envs"><code>n_envs</code></a></td><td class="num">16</td><td>Quy mô</td><td>Số env song song</td></tr>
+<tr><td><a href="#n_steps"><code>n_steps</code></a></td><td class="num">128</td><td>Rollout</td><td>Bước mỗi env trong một rollout</td></tr>
+<tr><td><a href="#epochs"><code>epochs</code></a></td><td class="num">4</td><td>Cập nhật</td><td>Số lần quét mỗi rollout</td></tr>
+<tr><td><a href="#n_minibatches"><code>n_minibatches</code></a></td><td class="num">4</td><td>Cập nhật</td><td>Số minibatch mỗi lần quét</td></tr>
+<tr><td><a href="#lr"><code>lr</code></a></td><td class="num">2.5e-4</td><td>Tối ưu</td><td>Learning rate ban đầu (giảm về 0)</td></tr>
+<tr><td><a href="#gamma"><code>gamma</code></a></td><td class="num">0.99</td><td>Advantage</td><td>Hệ số chiết khấu</td></tr>
+<tr><td><a href="#lam"><code>lam</code></a></td><td class="num">0.95</td><td>Advantage</td><td>λ của GAE</td></tr>
+<tr><td><a href="#clip_eps"><code>clip_eps</code></a></td><td class="num">0.1</td><td>Loss</td><td>Ngưỡng cắt tỷ lệ policy</td></tr>
+<tr><td><a href="#c1"><code>c1</code></a></td><td class="num">0.5</td><td>Loss</td><td>Trọng số value loss</td></tr>
+<tr><td><a href="#c2"><code>c2</code></a></td><td class="num">0.01</td><td>Loss</td><td>Trọng số entropy bonus</td></tr>
+<tr><td><a href="#max_grad"><code>max_grad</code></a></td><td class="num">0.5</td><td>Tối ưu</td><td>Cắt chuẩn gradient</td></tr>
+<tr><td><a href="#seed"><code>seed</code></a></td><td class="num">0</td><td>Tái lập</td><td>Seed ngẫu nhiên</td></tr>
+<tr><td><a href="#log_every"><code>log_every</code></a></td><td class="num">50</td><td>Ghi/lưu</td><td>In log mỗi N update</td></tr>
+<tr><td><a href="#save_every"><code>save_every</code></a></td><td class="num">200</td><td>Ghi/lưu</td><td>Lưu checkpoint mỗi N update</td></tr>
+<tr><td><a href="#reward_fn"><code>reward_fn</code></a></td><td><code>log_reward</code></td><td>Reward</td><td>Biến đổi reward thật thành reward học</td></tr>
+</tbody></table></div>
+
+<h2 id="derived">Đại lượng dẫn xuất</h2>
+<p>Vài con số không phải tham số nhưng quyết định hành vi, được suy ra từ các tham số trên:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Đại lượng</th><th>Công thức</th><th>Mặc định</th></tr></thead>
+<tbody>
+<tr><td><code>batch</code></td><td><code>n_envs × n_steps</code></td><td class="num">2,048</td></tr>
+<tr><td><code>minibatch</code></td><td><code>batch // n_minibatches</code></td><td class="num">512</td></tr>
+<tr><td><code>n_updates</code></td><td><code>total_steps // batch</code></td><td class="num">976</td></tr>
+<tr><td>Gradient step mỗi update</td><td><code>epochs × n_minibatches</code></td><td class="num">16</td></tr>
+<tr><td>Chân trời hiệu dụng của <code>gamma</code></td><td><code>1 / (1 − gamma)</code></td><td class="num">≈ 100 bước</td></tr>
+</tbody></table></div>
+
+<h2 id="scale">Quy mô chạy</h2>
+
+<section class="param">
+<h3 id="total_steps"><code>total_steps</code> <span class="type">int</span> <span class="default">mặc định 2,000,000</span></h3>
+<p>Tổng số bước env cho cả lần train. Một bước là một action, tương ứng 4 frame; 2,000,000 bước là 8,000,000 frame.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Độ dài run, và độ dài lịch giảm learning rate (lr về 0 đúng lúc kết thúc).</dd>
+<dt>Làm tròn</dt><dd>Số update là <code>total_steps // batch</code>, phần dư bị bỏ. Với mặc định chỉ chạy 976 update = 1,998,848 bước.</dd>
+<dt>Tăng</dt><dd>Agent có thêm thời gian học, lịch lr dài hơn. Chi phí tăng tuyến tính.</dd>
+<dt>Giảm</dt><dd>Chạy nhanh để thử, nhưng agent chưa kịp học. Run dưới vài chục nghìn bước chỉ để kiểm tra pipeline.</dd>
+<dt>Khi nào chỉnh</dt><dd>Gần như mọi lần. Thử nhanh dùng 50,000 đến 200,000; kết quả báo cáo nên dùng từ vài triệu trở lên. Để tham khảo, bài báo PPO gốc train Atari 10 triệu bước (40 triệu frame), tức gấp 5 lần mặc định ở đây.</dd>
+<dt>CLI</dt><dd><code>--steps N</code> hoặc <code>--set total_steps=N</code> (cả <code>2e6</code> đều được).</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="n_envs"><code>n_envs</code> <span class="type">int</span> <span class="default">mặc định 16</span></h3>
+<p>Số env chạy song song, mỗi env một process. Chỉ có một policy; các env chỉ thu dữ liệu. Xem <a href="../concepts/parallel-envs.html">Env song song và pipeline</a>.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Tốc độ thu dữ liệu, độ đa dạng của batch, và <strong>kích thước batch</strong> (<code>n_envs × n_steps</code>).</dd>
+<dt>Ràng buộc</dt><dd>Phải chẵn (chia 2 nhóm cho pipeline). Nên để <code>n_envs × n_steps</code> chia hết cho <code>n_minibatches</code>, nếu không minibatch cuối sẽ nhỏ hơn.</dd>
+<dt>Tăng</dt><dd>Thu nhanh hơn nếu còn nhân CPU rảnh; batch to hơn và đa dạng hơn; ít update hơn trên cùng <code>total_steps</code>. Quá số nhân CPU thì không nhanh thêm.</dd>
+<dt>Giảm</dt><dd>Nhẹ máy hơn nhưng chậm hơn. Batch nhỏ lại nếu không bù bằng <code>n_steps</code>.</dd>
+<dt>Khi nào chỉnh</dt><dd>Khi máy ít nhân hoặc ít RAM. Giảm <code>n_envs</code> thì tăng <code>n_steps</code> theo tỷ lệ nghịch để giữ batch (ví dụ 8 env × 256 bước).</dd>
+</dl>
+</section>
+
+<h2 id="rollout">Rollout và cập nhật</h2>
+
+<section class="param">
+<h3 id="n_steps"><code>n_steps</code> <span class="type">int</span> <span class="default">mặc định 128</span></h3>
+<p>Số bước mỗi env đi trước khi dừng lại để học. Cùng với <code>n_envs</code> tạo thành một rollout.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Độ dài đoạn mà GAE nhìn trước, và tần suất cập nhật policy. Cuối rollout, giá trị tương lai được ước bằng critic (<code>last_value</code>).</dd>
+<dt>Tăng</dt><dd>Mỗi update dùng nhiều dữ liệu hơn từ cùng một policy, advantage dựa nhiều vào thực tế hơn là ước lượng của critic; nhưng policy được cập nhật thưa hơn.</dd>
+<dt>Giảm</dt><dd>Cập nhật dày hơn nhưng batch nhỏ hơn và advantage phụ thuộc critic nhiều hơn.</dd>
+<dt>Khi nào chỉnh</dt><dd>Thường chỉ chỉnh để bù khi đổi <code>n_envs</code>. Giá trị 128 là chuẩn cho Atari.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="epochs"><code>epochs</code> <span class="type">int</span> <span class="default">mặc định 4</span></h3>
+<p>Số lần quét qua toàn bộ rollout trong mỗi update (mỗi lần quét xáo trộn lại thứ tự mẫu).</p>
+<dl>
+<dt>Điều khiển</dt><dd>Mỗi mẫu dữ liệu on-policy được dùng lại bao nhiêu lần. Đây cũng là đòn bẩy chính quyết định policy đi xa bao nhiêu trong một update.</dd>
+<dt>Tăng</dt><dd>Khai thác dữ liệu nhiều hơn (ít tốn công thu hơn) nhưng policy lệch xa lúc thu dữ liệu: <code>kl</code> và <code>clipfrac</code> tăng. Quá nhiều có thể làm học bất ổn.</dd>
+<dt>Giảm</dt><dd>An toàn hơn nhưng cần nhiều dữ liệu hơn để học cùng một lượng.</dd>
+<dt>Khi nào chỉnh</dt><dd>Khi <code>clipfrac</code> thường xuyên cao (&gt; 0.3) thì giảm; khi quá thấp và học chậm thì có thể tăng.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="n_minibatches"><code>n_minibatches</code> <span class="type">int</span> <span class="default">mặc định 4</span></h3>
+<p>Mỗi lần quét chia batch thành bấy nhiêu minibatch, mỗi minibatch tính một lần gradient.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Kích thước minibatch (<code>batch // n_minibatches</code> = 512) và số lần cập nhật trọng số mỗi update (<code>epochs × n_minibatches</code> = 16).</dd>
+<dt>Tăng</dt><dd>Minibatch nhỏ hơn, nhiều bước cập nhật hơn, gradient nhiễu hơn.</dd>
+<dt>Giảm</dt><dd>Minibatch lớn hơn, gradient mượt hơn, ít bước hơn (và tốn nhiều bộ nhớ GPU hơn mỗi bước).</dd>
+<dt>Khi nào chỉnh</dt><dd>Hiếm khi. Nếu GPU hết bộ nhớ khi học, tăng <code>n_minibatches</code>.</dd>
+</dl>
+</section>
+
+<h2 id="optim">Tối ưu hóa</h2>
+
+<section class="param">
+<h3 id="lr"><code>lr</code> <span class="type">float</span> <span class="default">mặc định 2.5e-4</span></h3>
+<p>Learning rate của Adam <em>ở đầu run</em>. Giảm tuyến tính về 0 theo công thức <code>lr × (1 − update / n_updates)</code>.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Bước nhảy của mỗi lần cập nhật. Tham số nhạy nhất của PPO.</dd>
+<dt>Tăng</dt><dd>Học nhanh hơn lúc đầu nhưng dễ bất ổn: KL và clipfrac cao, điểm đột ngột sụp.</dd>
+<dt>Giảm</dt><dd>Ổn định hơn nhưng chậm; entropy đứng yên gần 2.197 trong thời gian dài là dấu hiệu học quá chậm.</dd>
+<dt>Khi nào chỉnh</dt><dd>Là thứ đầu tiên thử khi đường học bất thường. Khi train tiếp từ model có sẵn nên đặt thấp hơn lần đầu (lịch lr chạy lại từ đầu).</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="max_grad"><code>max_grad</code> <span class="type">float</span> <span class="default">mặc định 0.5</span></h3>
+<p>Ngưỡng cắt chuẩn gradient (<code>clip_grad_norm_</code>) trước mỗi lần <code>optimizer.step()</code>. Gradient có chuẩn lớn hơn ngưỡng sẽ bị co lại cho vừa.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Chặn những lần cập nhật "đột biến" do một minibatch bất thường.</dd>
+<dt>Tăng</dt><dd>Ít can thiệp hơn; nguy cơ một vài bước lớn phá policy.</dd>
+<dt>Giảm</dt><dd>Mọi bước bị kìm nhỏ lại, học chậm hơn.</dd>
+<dt>Khi nào chỉnh</dt><dd>Hiếm. Giữ 0.5 trừ khi bạn có lý do cụ thể.</dd>
+</dl>
+</section>
+
+<h2 id="advantage">Advantage và chiết khấu</h2>
+
+<section class="param">
+<h3 id="gamma"><code>gamma</code> <span class="type">float</span> <span class="default">mặc định 0.99</span></h3>
+<p>Hệ số chiết khấu γ: reward nhận sau <code>k</code> bước chỉ được tính <code>γ^k</code>.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Agent coi trọng tương lai bao xa. Chân trời hiệu dụng khoảng <code>1 / (1 − γ)</code> bước; ở 0.99 là cỡ 100 bước (400 frame, khoảng 7 giây game).</dd>
+<dt>Tăng</dt><dd>Nhìn xa hơn (hợp với việc tránh ma, lên kế hoạch ăn viên năng lượng) nhưng giá trị khó ước lượng, phương sai cao.</dd>
+<dt>Giảm</dt><dd>Thiển cận, chỉ chăm chấm gần; học dễ hơn nhưng hành vi kém chiến lược.</dd>
+<dt>Khi nào chỉnh</dt><dd>Hiếm. 0.99 là chuẩn cho Atari.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="lam"><code>lam</code> <span class="type">float</span> <span class="default">mặc định 0.95</span></h3>
+<p>Tham số λ của GAE, pha trộn giữa ước lượng "một bước" và "đến hết rollout" khi tính advantage.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Đánh đổi bias và variance của advantage. <code>lam=0</code>: chỉ nhìn một bước và tin vào critic (bias cao, variance thấp). <code>lam=1</code>: dùng reward thực tế đến hết rollout (bias thấp, variance cao).</dd>
+<dt>Tăng</dt><dd>Ít phụ thuộc vào critic nhưng nhiễu hơn.</dd>
+<dt>Giảm</dt><dd>Mượt hơn nhưng thiên lệch nếu critic còn kém.</dd>
+<dt>Khi nào chỉnh</dt><dd>Hiếm. 0.95 là chuẩn.</dd>
+</dl>
+</section>
+
+<h2 id="loss">Hàm loss</h2>
+
+<section class="param">
+<h3 id="clip_eps"><code>clip_eps</code> <span class="type">float</span> <span class="default">mặc định 0.1</span></h3>
+<p>Ngưỡng ε của clipped objective: tỷ lệ <code>π_new / π_old</code> bị cắt trong <code>[1 − ε, 1 + ε]</code>.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Một update được phép đẩy xác suất của một action đi xa bao nhiêu. Là "hàng rào an toàn" của PPO.</dd>
+<dt>Tăng</dt><dd>Cho phép bước lớn hơn, học nhanh hơn nhưng kém ổn định.</dd>
+<dt>Giảm</dt><dd>Bảo thủ hơn; <code>clipfrac</code> (tỷ lệ mẫu bị cắt) tăng vì dễ chạm ngưỡng hơn.</dd>
+<dt>Khi nào chỉnh</dt><dd>Thường chỉnh cùng <code>lr</code> và <code>epochs</code> khi đường học bất ổn. Mặc định 0.1 là giá trị cho Atari; giữ nguyên suốt run (không giảm dần).</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="c1"><code>c1</code> <span class="type">float</span> <span class="default">mặc định 0.5</span></h3>
+<p>Trọng số của value loss trong tổng loss: <code>loss = pg_loss + c1·v_loss − c2·entropy</code>.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Actor và critic dùng chung thân CNN, nên <code>c1</code> quyết định gradient của critic "lấn" bao nhiêu so với gradient của policy trên các lớp chung.</dd>
+<dt>Tăng</dt><dd>Critic được ưu tiên, ước lượng giá trị tốt hơn nhưng có thể kéo biểu diễn chung lệch khỏi nhu cầu của policy.</dd>
+<dt>Giảm</dt><dd>Critic học chậm, advantage nhiễu hơn.</dd>
+<dt>Khi nào chỉnh</dt><dd>Hiếm. Xem <code>v_loss</code> trong log: nếu nó rất lớn và không giảm thì critic đang gặp khó.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="c2"><code>c2</code> <span class="type">float</span> <span class="default">mặc định 0.01</span></h3>
+<p>Trọng số của entropy bonus. Entropy càng cao thì policy càng ngẫu nhiên; phần thưởng này chống việc policy "chốt" quá sớm.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Mức khám phá. Entropy tối đa là <code>ln 9 ≈ 2.197</code> (đều trên 9 action).</dd>
+<dt>Tăng</dt><dd>Khám phá nhiều hơn, tránh kẹt vào chiến thuật kém, nhưng quá lớn thì policy mãi ngẫu nhiên, entropy gần 2.197 không giảm.</dd>
+<dt>Giảm</dt><dd>Hội tụ nhanh về policy gần tất định; nguy cơ chốt sớm: entropy sụt nhanh trong khi điểm không tăng.</dd>
+<dt>Khi nào chỉnh</dt><dd>Khi quan sát entropy giảm quá nhanh (tăng <code>c2</code>) hoặc không chịu giảm (giảm <code>c2</code>). Ví dụ <code>--set c2=0.02</code>.</dd>
+</dl>
+</section>
+
+<h2 id="infra">Tái lập, ghi log, lưu</h2>
+
+<section class="param">
+<h3 id="seed"><code>seed</code> <span class="type">int</span> <span class="default">mặc định 0</span></h3>
+<p>Seed cho <code>random</code>, <code>numpy</code>, <code>torch</code> và cho các env (env thứ <code>k</code> dùng <code>seed + k</code>).</p>
+<dl>
+<dt>Điều khiển</dt><dd>Khởi tạo trọng số mạng và trạng thái xuất phát của các ván.</dd>
+<dt>Lưu ý</dt><dd>Cùng seed không đảm bảo cùng kết quả từng chi tiết (xem <a href="../concepts/parallel-envs.html#seeds">Seed của từng env</a>). Dùng nhiều seed để đo độ nhiễu.</dd>
+<dt>CLI</dt><dd>Dùng <code>--seed</code> (mặc định 0). <code>--set seed=...</code> sẽ bị <code>--seed</code> đè.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="log_every"><code>log_every</code> <span class="type">int</span> <span class="default">mặc định 50</span></h3>
+<p>In một dòng log mỗi bấy nhiêu <strong>update</strong> (không phải bước env). Update cuối luôn được in.</p>
+<dl>
+<dt>Lưu ý</dt><dd>Chỉ ảnh hưởng việc <em>in ra màn hình</em>. Chỉ số trong <code>log</code> (dùng để vẽ) được ghi <strong>mỗi update</strong> bất kể giá trị này.</dd>
+<dt>Khi nào chỉnh</dt><dd>Run ngắn thì đặt nhỏ (ví dụ 5) để thấy log; mặc định 50 update ≈ 102,400 bước.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="save_every"><code>save_every</code> <span class="type">int</span> <span class="default">mặc định 200</span></h3>
+<p>Lưu checkpoint <code>.pt</code> mỗi bấy nhiêu <strong>update</strong> (khi có <code>save_path</code>). Mặc định 200 update ≈ 409,600 bước.</p>
+<dl>
+<dt>Khi nào chỉnh</dt><dd>Run dài: đặt nhỏ để mất ít khi máy treo. Chỉ lưu <code>.pt</code>; <code>_episodes.npy</code> và <code>_log.npy</code> chỉ ghi khi train kết thúc.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="reward_fn"><code>reward_fn</code> <span class="type">Callable</span> <span class="default">mặc định log_reward</span></h3>
+<p>Hàm nhận <strong>mảng reward thật</strong> của một nhóm env (độ dài <code>n_envs / 2</code>) và trả về mảng reward dùng để học. Mặc định <code>log1p(r / 10)</code>.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Chỉ reward học. Điểm báo cáo, số viên năng lượng và số ma vẫn tính từ reward thật.</dd>
+<dt>Lưu ý</dt><dd>Không đặt được từ CLI (<code>--set reward_fn=...</code> bị từ chối). Dùng Python. Hàm là hàm thuần, không giữ trạng thái; xem <a href="../guides/reward-shaping.html">Reward shaping</a> để biết cách làm khi cần trạng thái.</dd>
+</dl>
+</section>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>
