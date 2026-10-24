@@ -1,0 +1,12 @@
+.venv
+__pycache__/
+UC-Berkeley-AI-Pacman-Project
+runs/
+*.egg-info/
+*.pth 
+*.pt
+*.npy
+REL_Ms_Pacman/
+logs
+*.zip
+.vscode

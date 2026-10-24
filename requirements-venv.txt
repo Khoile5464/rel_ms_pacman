@@ -1,0 +1,24 @@
+# Moi truong da kiem chung cho REL_Ms_Pacman (Python 3.10, Windows, GPU NVIDIA).
+# Khac requirements.txt cua nhom truong:
+#   - numpy<2          : torch 2.3 duoc build cho numpy 1.x; numpy 2.x lam torch/opencv/streamlit loi.
+#   - them pygame, psutil (src/ co import nhung requirements.txt quen ghi).
+#   - bo AutoROM       : ale-py >= 0.9 da kem san ROM Atari, khong can AutoROM.
+#   - torch KHONG nam o day, cai rieng ban CUDA:
+#       python -m pip install torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+#
+# Cai:  .venv\Scripts\python -m pip install -r requirements-venv.txt
+numpy<2
+stable-baselines3==2.1.0
+gymnasium==0.29.1
+ale-py>=0.9.0,<0.11.0
+opencv-python==4.8.1.78
+matplotlib==3.8.2
+pandas==2.1.3
+Pillow>=10.1.0
+tqdm==4.66.1
+tensorboard==2.14.1
+streamlit==1.28.1
+plotly==5.18.0
+pyarrow<17.0
+pygame
+psutil
