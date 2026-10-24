@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ms. Pacman PPO và DQN – Báo cáo tiến độ</title>
+<script>
+  window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['$$', '$$']] } };
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #5c5c5c;
+    --rule: #cfcfcf;
+    --accent: #8c1515;          /* Cardinal red */
+    --paper: #ffffff;
+    --bg: #f4f2ef;
+    --todo-bg: #fff6e0;
+    --todo-border: #d9a300;
+    --note-bg: #f1f5f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #e8e6e3; --muted: #a8a49e; --rule: #3d3d3d; --accent: #e07a7a;
+      --paper: #1c1c1e; --bg: #121214; --todo-bg: #2e2813; --todo-border: #b8890a; --note-bg: #20262d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Latin Modern Roman", "Computer Modern", "Times New Roman", Georgia, serif;
+    font-size: 17px; line-height: 1.6;
+  }
+  .page {
+    max-width: 820px; margin: 32px auto; padding: 56px 64px 64px;
+    background: var(--paper); border: 1px solid var(--rule);
+  }
+  @media (max-width: 700px) { .page { margin: 0; padding: 28px 16px 40px; border: 0; } body { font-size: 16px; } }
+
+  .banner {
+    font-family: system-ui, sans-serif; font-size: 13px; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--accent); border-top: 3px solid var(--accent); padding-top: 8px; margin-bottom: 28px;
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 6px; text-align: center; font-weight: 700; }
+  .subtitle { text-align: center; color: var(--muted); font-style: italic; margin-bottom: 18px; }
+  .authors { text-align: center; margin-bottom: 4px; }
+  .affil { text-align: center; color: var(--muted); font-size: 15px; margin-bottom: 30px; }
+
+  h2 { font-size: 21px; margin: 38px 0 10px; padding-bottom: 4px; border-bottom: 1px solid var(--rule); }
+  h2 .num { color: var(--accent); margin-right: 8px; }
+  h3 { font-size: 18px; margin: 24px 0 6px; }
+  h4 { font-size: 16px; margin: 18px 0 4px; font-style: italic; font-weight: 600; }
+  p { margin: 0 0 12px; text-align: justify; hyphens: auto; }
+  ul, ol { margin: 0 0 12px; padding-left: 26px; }
+  li { margin-bottom: 4px; }
+
+  .abstract { margin: 0 24px 8px; font-size: 16px; }
+  .abstract h2 { text-align: center; border: 0; font-size: 18px; margin-top: 0; }
+  .abstract ul { padding-left: 22px; }
+
+  table { border-collapse: collapse; margin: 12px auto 6px; font-size: 15px; width: auto; max-width: 100%; }
+  th, td { padding: 5px 12px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { border-top: 2px solid var(--ink); border-bottom: 1px solid var(--ink); }
+  tbody tr:last-child td { border-bottom: 2px solid var(--ink); }
+  td.l, th.l { text-align: left; }
+  .tablewrap { overflow-x: auto; }
+  caption, .caption { font-size: 14.5px; color: var(--muted); text-align: left; margin: 4px 0 18px; }
+  .caption b, caption b { color: var(--ink); }
+  caption { caption-side: bottom; padding-top: 6px; }
+
+  figure { margin: 18px 0 20px; text-align: center; }
+  figure img { max-width: 100%; height: auto; border: 1px solid var(--rule); }
+
+  code, .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: .86em; background: var(--note-bg); padding: 1px 5px; border-radius: 3px; }
+  pre { background: var(--note-bg); padding: 12px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.5; border-left: 3px solid var(--accent); margin: 10px 0 16px; }
+  pre code { background: none; padding: 0; }
+
+  .todo {
+    background: var(--todo-bg); border-left: 4px solid var(--todo-border);
+    padding: 10px 16px; margin: 14px 0; font-size: 15.5px;
+  }
+  .todo strong.tag { font-family: system-ui, sans-serif; font-size: 12.5px; letter-spacing: .06em; color: var(--todo-border); }
+  .note { background: var(--note-bg); border-left: 4px solid var(--muted); padding: 10px 16px; margin: 14px 0; font-size: 15.5px; }
+
+  .math-block { margin: 8px 0 14px; overflow-x: auto; }
+  .refs { font-size: 15px; padding-left: 0; list-style: none; }
+  .refs li { padding-left: 2.2em; text-indent: -2.2em; margin-bottom: 7px; }
+  footer { margin-top: 36px; border-top: 1px solid var(--rule); padding-top: 10px; font-size: 13.5px; color: var(--muted); font-family: system-ui, sans-serif; }
+
+  @media print {
+    body { background: #fff; } .page { border: 0; margin: 0; max-width: none; padding: 0; }
+    figure, table, pre { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<article class="page">
+
+<div class="banner"><span>REL301m · Reinforcement Learning · FPT University</span><span>Progress Report (chưa phải báo cáo cuối kỳ)</span></div>
+
+<h1>Học tăng cường sâu cho Ms. Pacman:<br>DQN và PPO trên môi trường Atari</h1>
+<div class="subtitle">Báo cáo tiến độ giữa kỳ</div>
+<div class="authors">[Tên thành viên 1] · [Tên thành viên 2] · [Tên thành viên 3]</div>
+<div class="affil">Môn REL301m, Đại học FPT · Cập nhật ngày 24/10/2026</div>
+
+<!-- ============ ABSTRACT ============ -->
+<section class="abstract">
+  <h2>Abstract</h2>
+  <p>Dự án dùng trò chơi Atari <em>Ms. Pacman</em> làm bài tập thực hành để học học tăng cường sâu (deep reinforcement learning). Hai thuật toán được chọn là <strong>DQN</strong> (value-based, off-policy) và <strong>PPO</strong> (policy gradient, on-policy). Đến thời điểm này mới có PPO được huấn luyện hoàn chỉnh trên Ms. Pacman. DQN đã cài đặt xong nhưng <strong>chưa có kết quả trên môi trường này</strong>.</p>
+  <ul>
+    <li><b>Phương pháp:</b> hai agent dùng chung một CNN kiểu Nature DQN, nhận 4 khung hình xám 84×84 xếp chồng, khác nhau ở đầu ra (đầu actor–critic cho PPO, đầu Q cho DQN).</li>
+    <li><b>Môi trường:</b> <span class="mono">ALE/MsPacman-v5</span> (Gymnasium + Arcade Learning Environment), 9 hành động rời rạc, 16 môi trường chạy song song, huấn luyện trên một GPU RTX 3070 Ti Laptop.</li>
+    <li><b>Kết quả tốt nhất cho đến nay (PPO, 2 triệu bước, hai lần chạy):</b> điểm trung bình khi huấn luyện khoảng 690 đến 720 so với 232 của agent ngẫu nhiên. Cửa sổ trượt 50 ván tốt nhất đạt 914, ván đơn tốt nhất đạt 4250. Khi đánh giá riêng với seed cố định, mô hình PPO lần 1 đạt <b>546 ± 195</b> (tối đa 910, 10 ván).</li>
+    <li><b>Nhận xét chính:</b> điểm tăng nhanh trong khoảng 25 nghìn bước đầu rồi gần như đi ngang (khoảng 700), kể cả khi huấn luyện thêm 2 triệu bước. Nguyên nhân chưa được xác định.</li>
+  </ul>
+</section>
+
+<!-- ============ 1. INTRODUCTION ============ -->
+<h2><span class="num">1</span>Introduction</h2>
+
+<h3>1.1 Bối cảnh</h3>
+<p>Dạy máy chơi trò chơi điện tử là một bài toán quen thuộc của trí tuệ nhân tạo. Từ khi Mnih và cộng sự (2013, 2015) cho thấy một mạng neural tích chập có thể học chơi nhiều trò Atari chỉ từ điểm số và hình ảnh, bộ trò chơi Atari trở thành bài kiểm tra tiêu chuẩn cho học tăng cường sâu. Bài toán này không còn mới. Dự án này không nhằm đạt kết quả vượt trội so với các nghiên cứu trước. Mục đích là <strong>học và thực hành học tăng cường</strong>: cài đặt, huấn luyện và so sánh hai thuật toán kinh điển trên một môi trường đủ phức tạp để thấy được các khó khăn thực tế.</p>
+<p>Ms. Pacman phù hợp cho mục đích đó vì quy tắc dễ hiểu (ăn chấm, tránh ma, ăn viên năng lượng để đuổi ma) nhưng tín hiệu thưởng thưa, có nhiều loại sự kiện với giá trị rất khác nhau (10, 50, 200 đến 1600 điểm), và ma có hành vi khác nhau.</p>
+
+<h3>1.2 Vấn đề thách thức</h3>
+<div class="todo"><strong class="tag">TODO</strong><br>Nhóm chưa tự định nghĩa các thách thức của bài toán. Phần này sẽ được điền ở bản sau. Dữ kiện đã quan sát được, để làm chất liệu khi viết: điểm huấn luyện đi ngang quanh 700 từ rất sớm (mục 5), và chưa rõ nguyên nhân là do thiết kế reward, khám phá, hay giới hạn ngân sách bước.</div>
+
+<h3>1.3 Mục tiêu và phạm vi</h3>
+<ul>
+  <li><b>Mục tiêu:</b> (i) cài đặt DQN và PPO từ đầu bằng PyTorch, không dùng thư viện thuật toán có sẵn; (ii) huấn luyện cả hai trên Ms. Pacman với cùng môi trường, tiền xử lý, kiến trúc mạng và ngân sách bước; (iii) so sánh về điểm số, độ ổn định và hiệu quả mẫu.</li>
+  <li><b>Phạm vi:</b> chỉ dùng đầu vào là ảnh điểm ảnh; không dùng đặc trưng thiết kế tay. Một môi trường (<span class="mono">ALE/MsPacman-v5</span>). Chưa đặt mục tiêu đạt mức điểm của con người.</li>
+  <li><b>Trạng thái hiện tại:</b> PPO đã huấn luyện; DQN đã cài đặt nhưng chưa chạy trên Ms. Pacman; chưa so sánh được hai phương pháp.</li>
+</ul>
+
+<!-- ============ 2. BACKGROUND ============ -->
+<h2><span class="num">2</span>Background / Theoretical Framework</h2>
+
+<h3>2.1 Quá trình quyết định Markov</h3>
+<p>Bài toán được mô hình hóa là một MDP \((\mathcal S,\mathcal A,P,r,\gamma)\). Tại mỗi bước agent quan sát \(s_t\), chọn \(a_t\sim\pi(\cdot\mid s_t)\), nhận \(r_t\) và chuyển sang \(s_{t+1}\). Mục tiêu là tối đa hóa tổng thưởng chiết khấu kỳ vọng \(G_t=\sum_{k\ge0}\gamma^k r_{t+k}\). Hàm giá trị trạng thái và hành động là
+$$V^\pi(s)=\mathbb E_\pi[G_t\mid s_t=s],\qquad Q^\pi(s,a)=\mathbb E_\pi[G_t\mid s_t=s,a_t=a].$$
+Ở đây \(\gamma=0.99\) cho cả hai thuật toán (Sutton & Barto, 2018).</p>
+
+<h3>2.2 Deep Q-Network (DQN)</h3>
+<p>DQN xấp xỉ hàm giá trị hành động tối ưu \(Q^*(s,a)\) bằng mạng neural \(Q_\theta\), dựa trên phương trình tối ưu Bellman
+$$Q^*(s,a)=\mathbb E\big[r+\gamma\max_{a'}Q^*(s',a')\big].$$
+Khi đã có \(Q\), policy là \(a=\arg\max_a Q(s,a)\). Huấn luyện bằng hồi quy bán gradient trên đích
+$$y=r+\gamma\,(1-d)\,\max_{a'}Q_{\theta^-}(s',a'),\qquad \mathcal L(\theta)=\mathbb E_{(s,a,r,s',d)\sim\mathcal D}\big[\mathrm{Huber}\big(Q_\theta(s,a),\,y\big)\big].$$
+Hai kỹ thuật giúp ổn định (Mnih et al., 2015):</p>
+<ul>
+  <li><b>Experience replay:</b> lưu các chuyển tiếp \((s,a,r,s',d)\) vào bộ đệm \(\mathcal D\) và lấy mẫu ngẫu nhiên khi học. Việc này phá tương quan giữa các mẫu liên tiếp và dùng lại mỗi mẫu nhiều lần.</li>
+  <li><b>Target network:</b> tham số \(\theta^-\) là bản sao của \(\theta\), chỉ được cập nhật định kỳ. Nhờ đó đích \(y\) không dịch chuyển sau mỗi bước gradient.</li>
+</ul>
+<p>Khám phá dùng \(\epsilon\)-greedy: với xác suất \(\epsilon\) chọn hành động ngẫu nhiên. Bản cài đặt ở đây là DQN gốc, chưa có Double DQN, Dueling hay Prioritized Replay.</p>
+
+<h3>2.3 Proximal Policy Optimization (PPO)</h3>
+<p>PPO (Schulman et al., 2017) học trực tiếp policy \(\pi_\theta(a\mid s)\) và một critic \(V_\phi(s)\). Mỗi vòng lặp thu một rollout bằng policy hiện tại, tính advantage bằng GAE (Schulman et al., 2016)
+$$\delta_t=r_t+\gamma V(s_{t+1})-V(s_t),\qquad \hat A_t=\sum_{l\ge0}(\gamma\lambda)^l\,\delta_{t+l},$$
+rồi tối ưu hàm mục tiêu bị cắt. Với tỷ lệ xác suất \(\rho_t(\theta)=\pi_\theta(a_t\mid s_t)/\pi_{\theta_{old}}(a_t\mid s_t)\):
+$$L^{CLIP}(\theta)=\mathbb E_t\Big[\min\big(\rho_t\hat A_t,\ \mathrm{clip}(\rho_t,1-\varepsilon,1+\varepsilon)\hat A_t\big)\Big].$$
+Phần cắt chặn gradient khi policy mới lệch quá xa policy cũ, cho phép cập nhật nhiều epoch trên cùng rollout. Hàm loss tổng gồm ba thành phần:
+$$L=-L^{CLIP}+c_1\,\mathbb E\big[(V_\phi(s_t)-\hat R_t)^2\big]-c_2\,\mathbb E\big[\mathcal H(\pi_\theta(\cdot\mid s_t))\big],$$
+trong đó \(\hat R_t=\hat A_t+V(s_t)\) và số hạng entropy \(\mathcal H\) khuyến khích khám phá.</p>
+
+<h3>2.4 So sánh khái quát</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Tiêu chí</th><th class="l">DQN</th><th class="l">PPO</th></tr></thead>
+  <tbody>
+    <tr><td>Họ thuật toán</td><td class="l">Value-based</td><td class="l">Policy gradient (actor–critic)</td></tr>
+    <tr><td>Dữ liệu</td><td class="l">Off-policy, dùng lại qua replay buffer</td><td class="l">On-policy, bỏ rollout sau khi dùng</td></tr>
+    <tr><td>Khám phá</td><td class="l">\(\epsilon\)-greedy</td><td class="l">Lấy mẫu từ policy + entropy bonus</td></tr>
+    <tr><td>Cơ chế ổn định</td><td class="l">Target network, Huber loss, gradient clipping</td><td class="l">Clipped objective, GAE, gradient clipping</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="caption"><b>Bảng 1.</b> Khác biệt chính giữa hai thuật toán sử dụng trong dự án.</div>
+
+<!-- ============ 3. DATASET / STATE ============ -->
+<h2><span class="num">3</span>Dataset / State Representation &amp; Features</h2>
+<p>Học tăng cường không có tập dữ liệu cố định. Dữ liệu được sinh ra khi agent tương tác với môi trường <span class="mono">ALE/MsPacman-v5</span> (Bellemare et al., 2013), cài qua Gymnasium (Towers et al., 2023) và <span class="mono">ale-py</span>.</p>
+
+<h3>3.1 Từ khung hình game thành đầu vào của mô hình</h3>
+<p>Agent <b>không</b> nhận cấu trúc lưới tọa độ hay đặc trưng trích xuất sẵn. Đầu vào là ảnh thô được tiền xử lý theo quy trình chuẩn của DeepMind, cho cả hai thuật toán:</p>
+<ol>
+  <li><b>Quan sát gốc:</b> ảnh RGB \(210\times160\times3\).</li>
+  <li><b>Frame skip = 4:</b> mỗi hành động lặp lại 4 khung hình, reward cộng dồn. Mỗi "bước" của agent tương ứng 4 frame game.</li>
+  <li><b>Xám hóa và đổi kích thước</b> về \(84\times84\).</li>
+  <li><b>Frame stack = 4:</b> xếp 4 khung hình gần nhất thành tensor \(4\times84\times84\) (uint8, chia 255 khi đưa vào mạng). Một khung hình đơn không cho biết hướng di chuyển; bốn khung hình thì có.</li>
+  <li><b>No-op reset</b> tối đa 30 bước đầu mỗi ván để các ván khởi đầu hơi khác nhau.</li>
+  <li><b>Tắt sticky action</b> (<span class="mono">repeat_action_probability=0</span>) và dùng bộ hành động tối giản: 9 hành động (NOOP và 8 hướng).</li>
+</ol>
+
+<h3>3.2 Các thành phần trạng thái</h3>
+<p>Vì đầu vào là điểm ảnh, các thành phần dưới đây <b>không được mã hóa thành biến riêng</b>. Mạng phải tự học chúng từ ảnh. Bảng 2 ghi lại thành phần nào được thể hiện ra sao.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Thành phần</th><th class="l">Có trong đầu vào?</th><th class="l">Cách thể hiện / ghi chú</th></tr></thead>
+  <tbody>
+    <tr><td>Vị trí Ms. Pacman</td><td class="l">Có, ngầm</td><td class="l">Sprite trong ảnh 84×84</td></tr>
+    <tr><td>Vị trí các con ma</td><td class="l">Có, ngầm</td><td class="l">Sprite; hướng di chuyển suy ra từ 4 frame liên tiếp</td></tr>
+    <tr><td>Trạng thái ma (săn đuổi / sợ hãi)</td><td class="l">Có, ngầm</td><td class="l">Ma sợ hãi đổi màu trong ảnh gốc. Sau khi xám hóa chỉ còn khác biệt về độ sáng. <em>Chưa kiểm tra</em> mạng có phân biệt được hay không (xem TODO mục 6).</td></tr>
+    <tr><td>Chấm và viên năng lượng còn lại</td><td class="l">Có, ngầm</td><td class="l">Các điểm sáng trên mê cung; kích thước sau resize rất nhỏ</td></tr>
+    <tr><td>Điểm số hiện tại</td><td class="l">Không</td><td class="l">Không đưa vào mạng. Điểm chỉ xuất hiện gián tiếp qua tín hiệu reward khi học.</td></tr>
+    <tr><td>Số mạng còn lại</td><td class="l">Có, ngầm</td><td class="l">Biểu tượng mạng ở cuối ảnh gốc (có thể đã mờ sau resize)</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="caption"><b>Bảng 2.</b> Các thành phần trạng thái và cách chúng đi vào mô hình.</div>
+
+<h3>3.3 Reward khi học và điểm khi báo cáo</h3>
+<p>Điểm gốc của game có thang rất rộng (10, 50, 200 đến 1600). Để gradient ổn định, <b>khi học</b> reward được nén theo thang log: \(\tilde r=\ln(1+r/10)\). Cụ thể: chấm 10 điểm → 0.69; viên năng lượng 50 → 1.79; ăn ma 200, 400, 800, 1600 → 3.04, 3.71, 4.39, 5.08. <b>Mọi điểm báo cáo trong tài liệu này đều là điểm thật của game</b>, cộng dồn qua cả 3 mạng.</p>
+<p>Khi học, môi trường dùng wrapper <span class="mono">EpisodicLife</span>: mất một mạng thì báo <span class="mono">terminated=True</span> để agent thấy cái chết có giá. Game chỉ reset thật khi hết 3 mạng. Khi <b>đánh giá</b>, wrapper này tắt và chạy đủ một ván 3 mạng (tối đa 4500 bước).</p>
+<p>Số viên năng lượng và số con ma ăn được được đếm từ reward thật (đúng 50 và thuộc {200, 400, 800, 1600}). Cách đếm này có sai số nhỏ: trái cây 200 điểm (từ màn 2) có thể bị tính nhầm là ma.</p>
+
+<!-- ============ 4. METHODOLOGY ============ -->
+<h2><span class="num">4</span>Methodology / Technical Approach</h2>
+
+<h3>4.1 Model Architecture</h3>
+<p>Cả hai agent dùng chung thân CNN của Nature DQN (Mnih et al., 2015); chỉ phần đầu ra khác nhau.</p>
+<pre><code>input  (4, 84, 84) uint8      → chia 255
+Conv2d 4→32,  8×8, stride 4  + ReLU   → (32, 20, 20)
+Conv2d 32→64, 4×4, stride 2  + ReLU   → (64,  9,  9)
+Conv2d 64→64, 3×3, stride 1  + ReLU   → (64,  7,  7)
+Flatten (3136) → Linear 512 + ReLU                       (thân dùng chung, 1 684 128 tham số)
+  ├─ PPO: actor  Linear 512→9 (logits, Categorical)  +  critic Linear 512→1   (tổng 1 689 258)
+  └─ DQN: head   Linear 512→9 (giá trị Q của 9 hành động)                      (tổng 1 688 745)</code></pre>
+<p>PPO khởi tạo trực giao: thân với gain \(\sqrt2\), lớp actor với gain 0.01 (policy ban đầu gần phân phối đều) và critic với gain 1.0.</p>
+
+<h3>4.2 Hạ tầng huấn luyện</h3>
+<p>Nút thắt tốc độ là CPU chạy emulator Atari, không phải GPU. Cả hai thuật toán dùng 16 môi trường song song (mỗi môi trường một process, <span class="mono">AsyncVectorEnv</span>) chia thành 2 nhóm chạy xen kẽ: trong lúc CPU chạy nhóm này thì GPU tính hành động cho nhóm kia. Với DQN, bước cập nhật mạng cũng chạy chồng lên lúc emulator đang chạy. Mã nguồn nằm trong thư viện <span class="mono">pacman_rl</span> do nhóm tách ra từ notebook.</p>
+
+<h3>4.3 Training Process</h3>
+
+<h4>PPO</h4>
+<ol>
+  <li><b>Thu thập rollout:</b> 16 môi trường × 128 bước = 2048 mẫu mỗi lần cập nhật, lưu \(\log\pi_{old}\) và \(V\).</li>
+  <li><b>GAE:</b> tính advantage lùi từ cuối rollout với \(\gamma=0.99\), \(\lambda=0.95\).</li>
+  <li><b>Cập nhật:</b> 4 epoch, 4 minibatch (512 mẫu), mỗi minibatch chuẩn hóa advantage. Loss gồm clipped policy loss, value loss (MSE) và entropy bonus. Cắt gradient theo chuẩn 0.5. Learning rate giảm tuyến tính về 0.</li>
+</ol>
+<p>Một lần huấn luyện 2M bước tương ứng 976 lần cập nhật.</p>
+
+<h4>DQN: cơ chế học và Target Network</h4>
+<ol>
+  <li><b>Thu thập:</b> mỗi vòng lặp 16 môi trường mỗi nơi đi một bước; 16 chuyển tiếp được ghi vào replay buffer. Hành động chọn \(\epsilon\)-greedy, \(\epsilon\) giảm tuyến tính từ 1.0 xuống 0.05 trong 5% đầu của tổng số bước.</li>
+  <li><b>Replay buffer</b> 200 000 chuyển tiếp. Để tiết kiệm RAM (khoảng 1.4 GB thay vì gấp 8 lần), buffer chỉ lưu khung hình mới nhất của mỗi bước và dựng lại stack 4 frame khi lấy mẫu; mỗi môi trường là một "cột" riêng nên stack không trộn frame của hai ván khác nhau.</li>
+  <li><b>Cập nhật:</b> sau 20 000 bước đầu thu thập, mỗi vòng lặp thực hiện một bước gradient trên minibatch 128 (tỷ lệ tái sử dụng mẫu 8, tương đương DQN gốc dùng batch 32 mỗi 4 bước). Loss Huber, cắt gradient theo chuẩn 10, optimizer Adam.</li>
+  <li><b>Target network:</b> bản sao \(Q_{\theta^-}\) được chép lại hoàn toàn từ \(Q_\theta\) mỗi 10 000 bước môi trường (cập nhật cứng). Đích học \(y=r+\gamma(1-d)\max_{a'}Q_{\theta^-}(s',a')\).</li>
+</ol>
+
+<h3>4.4 Hyperparameters</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Siêu tham số</th><th>PPO</th><th>DQN</th></tr></thead>
+  <tbody>
+    <tr><td>Tổng số bước (đã chạy / cấu hình)</td><td>2 000 000 (đã chạy)</td><td>10 000 000 (cấu hình mặc định, chưa chạy)</td></tr>
+    <tr><td>Số môi trường song song</td><td>16</td><td>16</td></tr>
+    <tr><td>Optimizer</td><td>Adam, eps = 1e-5</td><td>Adam</td></tr>
+    <tr><td>Learning rate</td><td>2.5e-4, giảm tuyến tính về 0</td><td>1e-4, cố định</td></tr>
+    <tr><td>Discount \(\gamma\)</td><td>0.99</td><td>0.99</td></tr>
+    <tr><td>GAE \(\lambda\)</td><td>0.95</td><td>–</td></tr>
+    <tr><td>Clip \(\varepsilon\)</td><td>0.1</td><td>–</td></tr>
+    <tr><td>Hệ số value / entropy (\(c_1\), \(c_2\))</td><td>0.5 / 0.01</td><td>–</td></tr>
+    <tr><td>Rollout / epoch / minibatch</td><td>128 bước / 4 / 4 (512 mẫu)</td><td>–</td></tr>
+    <tr><td>Replay buffer</td><td>–</td><td>200 000</td></tr>
+    <tr><td>Batch / số bước gradient mỗi vòng</td><td>–</td><td>128 / 1</td></tr>
+    <tr><td>Bắt đầu học sau</td><td>–</td><td>20 000 bước</td></tr>
+    <tr><td>Cập nhật target network</td><td>–</td><td>mỗi 10 000 bước (cứng)</td></tr>
+    <tr><td>\(\epsilon\) bắt đầu → kết thúc</td><td>–</td><td>1.0 → 0.05, trong 5% đầu</td></tr>
+    <tr><td>Cắt gradient (chuẩn)</td><td>0.5</td><td>10</td></tr>
+    <tr><td>Hàm loss giá trị</td><td>MSE</td><td>Huber (smooth L1)</td></tr>
+    <tr><td>Reward khi học</td><td colspan="2" style="text-align:center">\(\ln(1+r/10)\) + EpisodicLife</td></tr>
+    <tr><td>Seed</td><td>0 (lần 1), 1 (lần 2)</td><td>0</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="caption"><b>Bảng 3.</b> Siêu tham số. Các giá trị lấy trực tiếp từ <span class="mono">PPOConfig</span> và <span class="mono">DQNConfig</span>. Chưa tinh chỉnh siêu tham số; PPO dùng thiết lập chuẩn cho Atari.</div>
+
+<!-- ============ 5. EXPERIMENTS ============ -->
+<h2><span class="num">5</span>Experiments, Results &amp; Discussion</h2>
+
+<h3>5.1 Thiết lập thí nghiệm</h3>
+<p>Phần cứng: GPU NVIDIA GeForce RTX 3070 Ti Laptop, PyTorch 2.3.1 (CUDA 12.1), Python 3.10, <span class="mono">gymnasium 0.29.1</span>. Đã thực hiện hai lần chạy PPO, mỗi lần 2 triệu bước (khoảng 8 triệu frame game, 976 lần cập nhật):</p>
+<ul>
+  <li><b>Lần 1:</b> huấn luyện từ đầu, seed 0, 3158 ván hoàn chỉnh.</li>
+  <li><b>Lần 2:</b> khởi tạo từ trọng số cuối của lần 1 rồi huấn luyện thêm 2M bước với seed 1 và lịch learning rate bắt đầu lại từ 2.5e-4, 3086 ván. Đây là lần <em>huấn luyện tiếp</em>, không phải một seed độc lập.</li>
+</ul>
+<p>Tốc độ trung bình khoảng 1100 đến 2200 bước/giây tùy tải máy. <b>DQN chưa được huấn luyện trên Ms. Pacman</b>, nên các phần dưới đây chỉ nói về PPO.</p>
+
+<h3>5.2 Training curves</h3>
+<figure>
+  <img src="figures/fig1_learning_curves.png" alt="Đường học của hai lần chạy PPO">
+  <div class="caption"><b>Hình 1.</b> Điểm từng ván (chấm mờ) và trung bình trượt 50 ván (đường đậm) theo số bước môi trường. Đường nét đứt: điểm trung bình của agent ngẫu nhiên (232). Cả hai lần chạy tăng nhanh trong khoảng 25 nghìn bước đầu rồi đi ngang quanh 700 điểm.</div>
+</figure>
+
+<figure>
+  <img src="figures/fig2_entropy_events.png" alt="Entropy và số sự kiện ăn được">
+  <div class="caption"><b>Hình 2.</b> Trái: entropy của policy. Phải: số viên năng lượng (nét liền) và số ma (nét đứt) ăn được, cộng dồn. Entropy của lần 1 xuất phát tại \(\ln 9\approx2.20\) (policy gần đều) và giảm còn 1.16; lần 2 bắt đầu ở 1.38 vì kế thừa trọng số.</div>
+</figure>
+
+<h3>5.3 Performance metrics</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Chỉ số (điểm huấn luyện)</th><th>PPO lần 1</th><th>PPO lần 2</th></tr></thead>
+  <tbody>
+    <tr><td>Số ván</td><td>3158</td><td>3086</td></tr>
+    <tr><td>Điểm trung bình, toàn bộ</td><td>690.7</td><td>720.3</td></tr>
+    <tr><td>Điểm trung vị</td><td>600</td><td>640</td></tr>
+    <tr><td>Điểm trung bình, 100 ván cuối</td><td>727.4</td><td>767.3</td></tr>
+    <tr><td>Trung bình trượt 50 ván cao nhất</td><td>867.8 (ở 1.25M bước)</td><td>914.2 (ở 0.69M bước)</td></tr>
+    <tr><td>Ván đơn cao nhất</td><td>3660</td><td>4250</td></tr>
+    <tr><td>Trung bình theo từng phần tư (Q1 → Q4)</td><td>655 → 717 → 724 → 667</td><td>661 → 758 → 717 → 746</td></tr>
+    <tr><td>Viên năng lượng / ma ăn được (tổng)</td><td>2831 / 1880</td><td>2872 / 1900</td></tr>
+    <tr><td>Entropy cuối</td><td>1.16</td><td>1.23</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="caption"><b>Bảng 4.</b> Thống kê điểm huấn luyện (điểm thật, cả ván 3 mạng, lấy mẫu từ policy). Điểm huấn luyện tính trên các ván trong lúc policy còn thay đổi, nên không dùng làm điểm đánh giá cuối.</div>
+
+<h4>Đánh giá riêng</h4>
+<p>Mô hình PPO <b>lần 1</b> được chấm trên 10 ván với seed cố định 1000 đến 1009, lấy mẫu từ policy, tắt EpisodicLife (ván đủ 3 mạng). Agent ngẫu nhiên chạy 5 ván.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Phương pháp</th><th>Số ván</th><th>Trung bình</th><th>Độ lệch chuẩn</th><th>Tối đa</th></tr></thead>
+  <tbody>
+    <tr><td>Random</td><td>5</td><td>232</td><td>41</td><td>300</td></tr>
+    <tr><td>PPO (lần 1)</td><td>10</td><td>546</td><td>195</td><td>910</td></tr>
+    <tr><td>DQN</td><td colspan="4" style="text-align:center"><em>chưa có kết quả</em></td></tr>
+  </tbody>
+</table>
+</div>
+<div class="caption"><b>Bảng 5.</b> Đánh giá cuối trên Ms. Pacman. Mô hình lần 2 (huấn luyện tiếp) chưa được chấm riêng.</div>
+<figure>
+  <img src="figures/fig3_eval_boxplot.png" alt="Boxplot đánh giá" style="max-width:360px">
+  <div class="caption"><b>Hình 3.</b> Phân bố điểm đánh giá của Random và PPO lần 1.</div>
+</figure>
+
+<h3>5.4 Comparative analysis</h3>
+<ul>
+  <li><b>PPO so với ngẫu nhiên:</b> PPO cao hơn rõ rệt (546 so với 232 khi đánh giá; khoảng 700 so với 232 khi huấn luyện). Mẫu của agent ngẫu nhiên chỉ có 5 ván, nên con số 232 chỉ là ước lượng sơ bộ (ở notebook thử nghiệm trước, 5 ván ngẫu nhiên khác cho trung bình 198).</li>
+  <li><b>Lần 1 so với lần 2:</b> lần 2 cao hơn một chút (720 so với 691 điểm trung bình). Chênh lệch này nhỏ so với độ phân tán của điểm từng ván và chưa qua kiểm định thống kê, nên <b>chưa đủ để nói huấn luyện thêm 2M bước có cải thiện</b>. Điểm đầu của lần 2 cao ngay từ đầu (697 trong 100 ván đầu so với 411 của lần 1) vì kế thừa trọng số.</li>
+  <li><b>PPO so với DQN:</b> chưa so sánh được. Khi DQN có kết quả cần lưu ý rằng điểm huấn luyện của DQN còn bị \(\epsilon\)-greedy kéo xuống; nên so sánh bằng điểm đánh giá cùng seed.</li>
+</ul>
+
+<h3>5.5 Qualitative analysis</h3>
+<p>Nhóm mới xem hai ván của mô hình lần 1 (500 và 330 điểm, 800 và 619 bước) và chưa ghi lại video hay phân tích hành vi một cách có hệ thống. Vì vậy chỉ rút ra được nhận xét dựa trên các số đếm:</p>
+<ul>
+  <li><b>Agent có ăn ma:</b> tổng số ma ăn được bằng khoảng 0.66 lần số viên năng lượng ở cả hai lần chạy. Một viên năng lượng cho phép ăn tối đa 4 ma, nên đây là dấu hiệu agent có khai thác viên năng lượng để săn ma chứ không chỉ ăn chấm. Con số có thể hơi cao do trái cây bị đếm nhầm là ma (mục 3.3).</li>
+  <li><b>Số sự kiện tăng gần tuyến tính theo số bước</b> (Hình 2), tức tốc độ ăn gần như không đổi trong suốt quá trình huấn luyện, phù hợp với đường điểm đi ngang.</li>
+  <li><b>Policy chưa tiền định:</b> entropy còn khoảng 1.2 so với tối đa 2.20, tức policy còn lấy mẫu khá ngẫu nhiên giữa các hành động.</li>
+</ul>
+
+<h3>5.6 Thảo luận</h3>
+<p>Quan sát đáng chú ý nhất là <b>điểm đi ngang quanh 700 từ rất sớm</b>, không tăng thêm cả khi gấp đôi số bước huấn luyện. Dưới đây là các giả thuyết, <b>chưa được kiểm chứng</b>:</p>
+<ol>
+  <li>Ngân sách 2M bước (8M frame) là rất nhỏ so với các nghiên cứu Atari thường dùng (hàng chục triệu bước). Agent có thể chưa vượt qua giai đoạn học hành vi cơ bản.</li>
+  <li>Reward thang log làm chênh lệch giữa chấm (0.69) và ma (3 đến 5) thu hẹp lại, có thể làm yếu động cơ săn ma.</li>
+  <li>Agent có thể chưa học né ma hiệu quả; điểm có thể bị giới hạn bởi số mạng chứ không phải bởi khả năng ăn.</li>
+  <li>Khả năng phân biệt ma sợ hãi sau khi xám hóa còn chưa rõ.</li>
+</ol>
+<p>Điểm đánh giá (546) thấp hơn điểm huấn luyện (khoảng 700). Với 10 ván và độ lệch chuẩn 195, sai số chuẩn khoảng 62, nên khoảng cách này lớn hơn dao động ngẫu nhiên đơn thuần một chút. Cần chạy nhiều ván hơn trước khi kết luận có chênh lệch hệ thống hay không.</p>
+<div class="note"><b>Giới hạn của kết quả hiện tại.</b> Chỉ có PPO; mỗi cấu hình chỉ có một seed (lần 2 không độc lập với lần 1); đánh giá chỉ 10 ván; chưa có DQN; chưa có thí nghiệm đối chứng.</div>
+
+<!-- ============ 6. CONCLUSION ============ -->
+<h2><span class="num">6</span>Conclusion &amp; Việc cần làm tiếp theo</h2>
+<h3>6.1 Kết luận tạm thời</h3>
+<p>Đã xây dựng được hệ thống huấn luyện DQN và PPO trên Ms. Pacman (tiền xử lý Atari chuẩn, CNN dùng chung, môi trường song song, thư viện <span class="mono">pacman_rl</span>). PPO được huấn luyện 2 lần × 2M bước và học được hành vi tốt hơn rõ rệt so với ngẫu nhiên (khoảng 700 so với 232 điểm; đánh giá riêng 546 ± 195), nhưng tiến bộ dừng sớm ở mức đó. DQN chưa có kết quả nên chưa trả lời được câu hỏi chính của dự án là so sánh hai phương pháp.</p>
+
+<h3>6.2 Việc cần làm</h3>
+<ol>
+  <li><b>Huấn luyện DQN trên Ms. Pacman</b> với cùng ngân sách 2M bước để so sánh công bằng với PPO (cấu hình mặc định đang để 10M). Theo dõi <span class="mono">q_mean</span> và loss xem có phân kỳ không.</li>
+  <li><b>Đánh giá lại:</b> chấm mô hình PPO lần 2, tăng số ván đánh giá, và so sánh sampling với greedy.</li>
+  <li><b>Thí nghiệm reward âm theo thời gian</b> (ý tưởng đã có trong <span class="mono">TODO_ms_pacman.md</span>): so sánh ba cấu hình (không phạt; phạt nhỏ mỗi bước khoảng −0.01 đến −0.02 trên thang log; phạt khi "đứng bí" 50 đến 100 bước liên tiếp không có reward dương), mỗi cấu hình 3 seed. Lưu ý tương tác với <span class="mono">EpisodicLife</span> và giữ điểm báo cáo là điểm thật.</li>
+  <li><b>Nhiều seed:</b> chạy 3 đến 5 seed độc lập cho mỗi thuật toán, vẽ trung bình ± độ lệch chuẩn.</li>
+  <li><b>Phân tích định tính:</b> ghi video các ván chơi, thống kê nguyên nhân mất mạng, kiểm tra hành vi với ma sợ hãi, cân nhắc giữ màu thay vì xám hóa.</li>
+  <li><b>Xác định nguyên nhân điểm đi ngang</b> bằng các giả thuyết ở mục 5.6.</li>
+  <li><b>Điền mục 1.2 (vấn đề thách thức)</b> sau khi nhóm thống nhất.</li>
+  <li><b>Nếu còn thời gian:</b> Double DQN, Dueling hoặc Prioritized Replay như các thí nghiệm bóc tách (ablation).</li>
+</ol>
+
+<!-- ============ REFERENCES ============ -->
+<h2><span class="num">7</span>References</h2>
+<ol class="refs">
+  <li>[1] Bellemare, M. G., Naddaf, Y., Veness, J., &amp; Bowling, M. (2013). The Arcade Learning Environment: An evaluation platform for general agents. <em>Journal of Artificial Intelligence Research</em>, 47, 253–279.</li>
+  <li>[2] Mnih, V., Kavukcuoglu, K., Silver, D., Graves, A., Antonoglou, I., Wierstra, D., &amp; Riedmiller, M. (2013). Playing Atari with deep reinforcement learning. <em>arXiv:1312.5602</em>.</li>
+  <li>[3] Mnih, V., Kavukcuoglu, K., Silver, D., et al. (2015). Human-level control through deep reinforcement learning. <em>Nature</em>, 518, 529–533.</li>
+  <li>[4] Schulman, J., Wolski, F., Dhariwal, P., Radford, A., &amp; Klimov, O. (2017). Proximal policy optimization algorithms. <em>arXiv:1707.06347</em>.</li>
+  <li>[5] Schulman, J., Moritz, P., Levine, S., Jordan, M., &amp; Abbeel, P. (2016). High-dimensional continuous control using generalized advantage estimation. <em>ICLR</em>.</li>
+  <li>[6] Sutton, R. S., &amp; Barto, A. G. (2018). <em>Reinforcement Learning: An Introduction</em> (2nd ed.). MIT Press.</li>
+  <li>[7] Machado, M. C., Bellemare, M. G., Talvitie, E., Veness, J., Hausknecht, M., &amp; Bowling, M. (2018). Revisiting the Arcade Learning Environment: Evaluation protocols and open problems for general agents. <em>JAIR</em>, 61, 523–562.</li>
+  <li>[8] Towers, M., Terry, J. K., Kwiatkowski, A., et al. (2023). Gymnasium. Zenodo. https://doi.org/10.5281/zenodo.8127026</li>
+  <li>[9] Paszke, A., Gross, S., Massa, F., et al. (2019). PyTorch: An imperative style, high-performance deep learning library. <em>NeurIPS</em>.</li>
+  <li>[10] Henderson, P., Islam, R., Bachman, P., Pineau, J., Precup, D., &amp; Meger, D. (2018). Deep reinforcement learning that matters. <em>AAAI</em>.</li>
+</ol>
+
+<footer>
+  Dữ liệu trong báo cáo lấy từ <span class="mono">notebooks/ms_pacman_ppo*_episodes.npy</span>, <span class="mono">*_log.npy</span> và đầu ra của <span class="mono">notebooks/pacman_rl.ipynb</span>; siêu tham số lấy từ <span class="mono">pacman_rl/src/pacman_rl/agents/</span>. Đây là báo cáo tiến độ, nội dung còn thay đổi.
+</footer>
+
+</article>
+</body>
+</html>
