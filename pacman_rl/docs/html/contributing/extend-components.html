@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thêm chỉ số, reward, mạng · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="contributing/extend-components.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Đóng góp</div>
+<h1>Thêm chỉ số, reward, mạng</h1>
+<p class="lead">Các mở rộng nhỏ hơn một thuật toán: ghi thêm một chỉ số vào log, thêm trường vào config, viết wrapper env, thêm một mạng hay một cách chọn action. Mỗi mục nói rõ file nào cần sửa và những bẫy thường gặp.</p>
+
+<h2 id="add-metric">Thêm một chỉ số vào log</h2>
+<h3 id="metric-ppo">Trong <code>train_ppo</code></h3>
+<p>Khóa của <code>log</code> và danh sách giá trị được ghép bằng <code>zip</code> <strong>theo thứ tự</strong>:</p>
+<pre><code class="language-python">log = {"step": [], "ent": [], "kl": [], "clipfrac": [], "v_loss": [], "pg_loss": [], "pellets": [], "ghosts": []}
+...
+for k, v in zip(log, [global_step, entropy.item(), kl, cf, v_loss.item(), pg_loss.item(), n_pellet, n_ghost]):
+    log[k].append(v)
+</code></pre>
+<p>Thêm khóa mới vào <strong>cả hai chỗ, cùng vị trí</strong>. Ví dụ ghi thêm độ lệch chuẩn của advantage:</p>
+<pre><code class="language-python">log = {..., "pellets": [], "ghosts": [], "adv_std": []}
+...
+for k, v in zip(log, [..., n_pellet, n_ghost, adv.std().item()]):
+    log[k].append(v)
+</code></pre>
+<div class="callout warn">
+<p class="callout-title">Hai danh sách lệch vị trí thì không báo lỗi</p>
+<p><code>zip</code> dừng ở danh sách ngắn hơn và không cảnh báo. Nếu bạn thêm khóa mà quên thêm giá trị (hoặc ngược lại), một chỉ số sẽ bị ghi sai chỗ mà không có lỗi nào. Sau khi sửa, chạy một lần ngắn và <code>print(result.log)</code> để kiểm tra các list cùng độ dài.</p>
+</div>
+
+<h3 id="metric-dqn">Trong <code>train_dqn</code></h3>
+<p>Chỉ số DQN được ghi theo <code>log_every</code> (bước env), thường là trung bình tích lũy từ lần ghi trước. Mẫu có sẵn: <code>loss</code> và <code>q_mean</code> được cộng dồn vào <code>loss_acc</code>, <code>q_acc</code> trên GPU (để tránh đồng bộ mỗi bước), rồi chia cho <code>n_acc</code> khi ghi và đặt lại. Làm theo mẫu đó cho chỉ số mới: tạo bộ cộng dồn, cộng trong vòng học, đọc và reset trong khối <code>if step &gt;= next_log</code>.</p>
+
+<h3 id="metric-plot">Vẽ chỉ số mới</h3>
+<pre><code class="language-python">from pacman_rl.plotting import plot_metric
+plot_metric(runs, "adv_std", "Độ lệch chuẩn của advantage")
+</code></pre>
+<p>Run nào không có khóa đó thì bị bỏ qua (nên vẽ chung PPO và DQN không lỗi). Nhớ ghi khóa mới vào bảng <a href="../reference/files-and-logs.html#log-keys">File lưu và log</a>.</p>
+
+<h2 id="add-config">Thêm một trường vào config</h2>
+<p>Thêm vào dataclass với <strong>giá trị mặc định</strong> bảo toàn hành vi cũ và một comment ngắn nêu ý nghĩa, đơn vị:</p>
+<pre><code class="language-python">@dataclass
+class PPOConfig:
+    ...
+    value_clip: float = 0.0        # 0: tắt; &gt;0: cắt thay đổi value trong khoảng này
+</code></pre>
+<p>Dòng lệnh tự nhận trường mới qua <code>--set value_clip=0.2</code> vì <code>_parse_overrides</code> đọc danh sách trường của dataclass. Quy tắc ép kiểu theo <em>kiểu của giá trị mặc định</em>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Kiểu mặc định</th><th>Cách <code>--set</code> đọc</th></tr></thead>
+<tbody>
+<tr><td><code>int</code> (và <code>bool</code>, vì <code>bool</code> là con của <code>int</code>)</td><td><code>type(default)(float(value))</code>: nhận <code>8</code>, <code>2e6</code>, và với <code>bool</code> là <code>1</code>/<code>0</code> (không nhận <code>true</code>)</td></tr>
+<tr><td><code>float</code></td><td><code>float(value)</code></td></tr>
+<tr><td><code>str</code></td><td>giữ nguyên chuỗi</td></tr>
+<tr><td>Callable (như <code>reward_fn</code>)</td><td>bị từ chối, không đặt được từ CLI</td></tr>
+</tbody></table></div>
+<p>Cuối cùng, thêm trường vào trang tham chiếu config tương ứng (bảng tóm tắt và một khối <code>section.param</code>).</p>
+
+<h2 id="add-reward">Thêm một hàm reward</h2>
+<p>Hàm thuần đặt ở <code>envs/rewards.py</code> (cùng chỗ <code>log_reward</code>) và nhận/trả mảng numpy. <code>envs/</code> không được import torch. Hàm có trạng thái thì tạo lớp có <code>__call__</code>, xem ví dụ chạy được ở <a href="../guides/reward-shaping.html#stateful">Reward shaping</a>.</p>
+<p>Giữ nguyên nguyên tắc <em>ba loại điểm</em>: hàm reward chỉ đổi reward học, không được ảnh hưởng đến <code>count_events</code> hay <code>game_score</code> (hai thứ này tính từ reward thật, <a href="../concepts/environment.html#scores">xem</a>).</p>
+
+<h2 id="add-wrapper">Thêm một wrapper env</h2>
+<p>Đặt trong <code>envs/wrappers.py</code> (kế <code>EpisodicLife</code>) và bọc trong <code>make_env</code> (<code>envs/factory.py</code>). Quy ước:</p>
+<ul>
+<li><strong>Chỉ bọc khi học</strong>, trong nhánh <code>if episodic_life:</code>, để đánh giá (gọi <code>make_env()</code> không cờ) không bị ảnh hưởng.</li>
+<li><strong>Không import torch</strong>: mỗi process con của env chỉ cần <code>pacman_rl.envs</code>.</li>
+<li><strong>Dựng được trong process con</strong>: <code>PipelinedEnvs</code> dùng <code>functools.partial(make_env, ...)</code> thay cho lambda để hàm tạo env pickle được. Đừng thêm tham số không pickle được vào <code>make_env</code>.</li>
+<li><strong>Đừng sửa <code>reward</code></strong> nếu muốn <code>count_events</code> còn đúng. Đưa tín hiệu bổ sung qua <code>info</code> rồi để trainer xử lý.</li>
+<li><strong>Thứ tự bọc có ý nghĩa</strong>: <code>FrameStack</code> ngoài cùng, <code>EpisodicLife</code> bên trong nó. Wrapper mới nên nằm trong <code>EpisodicLife</code> hay ngoài nó tùy theo nó có cần thấy cái chết thật hay cái chết "mất mạng" hay không.</li>
+</ul>
+<div class="callout warn">
+<p class="callout-title">Sửa <code>PipelinedEnvs.recv</code> chạm tới cả hai trainer</p>
+<p><code>recv</code> trả về bộ bốn <code>(obs, reward, done, scores)</code> và cả <code>train_ppo</code> lẫn <code>train_dqn</code> cùng unpack bốn giá trị này. Đổi chữ ký là phải sửa cả hai (và mọi thuật toán bạn đã thêm).</p>
+</div>
+
+<h2 id="add-network">Thêm một mạng</h2>
+<ol>
+<li>Thêm lớp vào <code>models/networks.py</code>. Dùng lại <code>make_cnn()</code> nếu muốn chung thân CNN.</li>
+<li><code>forward</code> nhận <code>uint8</code> hình <code>(B, 4, 84, 84)</code> và tự chia <code>255.0</code> (không chuẩn hóa ở nơi khác).</li>
+<li>Constructor nhận <code>n_actions</code> làm tham số đầu tiên (để <code>load_model</code> dựng được bằng <code>MODEL_CLASSES[algo](n_actions)</code>).</li>
+<li>Xuất ra trong <code>models/__init__.py</code> và thêm vào <code>MODEL_CLASSES</code> với tên thuật toán.</li>
+<li>Thêm test hình dạng đầu ra (xem <code>test_network_shapes</code> trong <code>tests/test_core.py</code> làm mẫu).</li>
+</ol>
+<pre><code class="language-python">class DuelingQNetwork(nn.Module):
+    def __init__(self, n_actions):
+        super().__init__()
+        self.cnn = make_cnn()
+        self.value = nn.Linear(512, 1)
+        self.adv = nn.Linear(512, n_actions)
+        self.head = self.adv                      # dqn_policy đọc head.out_features để biết số action
+
+    def forward(self, x):                         # x: uint8 (B,4,84,84)
+        h = self.cnn(x.float() / 255.0)
+        a = self.adv(h)
+        return self.value(h) + a - a.mean(1, keepdim=True)
+</code></pre>
+<div class="callout note">
+<p class="callout-title">Vì sao có dòng <code>self.head = self.adv</code></p>
+<p><code>dqn_policy</code> lấy số action từ <code>model.head.out_features</code>. Mạng kiểu Q mới cần có thuộc tính <code>head</code> như vậy, hoặc bạn phải sửa <code>dqn_policy</code>.</p>
+</div>
+
+<h2 id="add-policy">Thêm một cách chọn action khi đánh giá</h2>
+<p>Thêm hàm <code>&lt;tên&gt;_policy(model, device, ...)</code> vào <code>evaluation.py</code>, trả về hàm <code>act(obs) -> int</code>. Mẫu:</p>
+<pre><code class="language-python">def my_policy(model, device):
+    def act(obs):                                   # obs: np.ndarray uint8 (4,84,84)
+        with torch.no_grad():
+            return model(torch.as_tensor(obs, device=device).unsqueeze(0)).argmax(1).item()
+    return act
+</code></pre>
+<p>Rồi dùng với <code>evaluate</code> / <code>watch</code>. Nếu muốn lệnh <code>eval</code>/<code>play</code> trên CLI dùng được, thêm một nhánh vào <code>cli._policy</code>.</p>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

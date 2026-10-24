@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thêm thuật toán mới · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="contributing/add-algorithm.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Đóng góp</div>
+<h1>Thêm thuật toán mới</h1>
+<p class="lead">Hướng dẫn từng bước, kèm một ví dụ chạy được: <strong>A2C</strong> trong khoảng 130 dòng, dùng lại env song song và mạng sẵn có. Sau đó là cách thêm một biến thể nhỏ (Double DQN) chỉ bằng một cờ trong config.</p>
+
+<div class="callout note">
+<p class="callout-title">A2C ở đây là ví dụ, không có sẵn trong thư viện</p>
+<p>Mã A2C bên dưới đã được thử đầy đủ: train, <code>eval</code> và <code>plot</code> qua dòng lệnh đều chạy. Tuy nhiên siêu tham số chưa được tinh chỉnh cho Ms. Pacman, nên hãy coi nó là mẫu về <em>cấu trúc</em>, không phải bảo đảm về chất lượng học.</p>
+</div>
+
+<h2 id="decide">Thuật toán mới hay chỉ một cờ?</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Thay đổi</th><th>Nên làm</th></tr></thead>
+<tbody>
+<tr><td>Đổi một vài dòng của vòng lặp hiện có (Double DQN, thêm value clipping cho PPO...)</td><td>Thêm trường vào Config, rẽ nhánh trong hàm train hiện có. Xem <a href="#double-dqn">Double DQN</a>.</td></tr>
+<tr><td>Vòng lặp khác hẳn (A2C, SAC rời rạc, Rainbow...)</td><td>Tạo <code>agents/&lt;tên&gt;.py</code> riêng. Phần còn lại của trang này.</td></tr>
+</tbody></table></div>
+
+<h2 id="touchpoints">Những chỗ phải chạm vào</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Việc cần làm</th><th>Bắt buộc?</th></tr></thead>
+<tbody>
+<tr><td><code>agents/&lt;tên&gt;.py</code> (mới)</td><td>Dataclass config và hàm <code>train_&lt;tên&gt;</code></td><td>Có</td></tr>
+<tr><td><code>agents/__init__.py</code></td><td>Import, thêm vào <code>ALGOS</code> và <code>__all__</code></td><td>Có (để CLI thấy)</td></tr>
+<tr><td><code>models/__init__.py</code></td><td>Thêm vào <code>MODEL_CLASSES</code> (để <code>load_run</code> nạp được)</td><td>Có</td></tr>
+<tr><td><code>models/networks.py</code></td><td>Mạng mới, nếu không dùng lại <code>ActorCriticCNN</code> / <code>QNetwork</code></td><td>Nếu cần</td></tr>
+<tr><td><code>cli.py</code></td><td>Thêm tên vào các <code>choices=[...]</code> (có 2 chỗ) và sửa <code>_policy</code></td><td>Có (để chạy từ dòng lệnh)</td></tr>
+<tr><td><code>evaluation.py</code></td><td>Hàm <code>&lt;tên&gt;_policy</code> nếu cách chọn action khác</td><td>Nếu cần</td></tr>
+<tr><td><code>__init__.py</code> (gói)</td><td>Thêm tên vào <code>_EXPORTS</code> để <code>from pacman_rl import ...</code> hoạt động</td><td>Tùy chọn</td></tr>
+<tr><td><code>tests/</code>, <code>docs/html/</code></td><td>Test cho phần không cần emulator; trang tham chiếu config</td><td>Nên</td></tr>
+</tbody></table></div>
+
+<h2 id="contract">Hợp đồng của một hàm train</h2>
+<p>Để mọi thứ khác (CLI, vẽ, đánh giá, lưu/nạp) dùng được thuật toán của bạn, hàm train cần tuân thủ:</p>
+<ol>
+<li><strong>Chữ ký chuẩn</strong>: <code>train_&lt;tên&gt;(cfg=None, *, model=None, save_path=None, device=None, render=False, watch_every=0, watch_episodes=1)</code>. Siêu tham số vào <code>cfg</code> (dataclass); các tùy chọn chạy là keyword riêng, vì chúng không đổi kết quả học.</li>
+<li><strong>Trả về <a href="../reference/api.html#TrainResult"><code>TrainResult(model, log, episodes)</code></strong>.
+  <ul>
+  <li><code>log</code>: dict khóa → list, mọi list cùng độ dài với <code>log["step"]</code> (bước env). <strong>Phải có</strong> <code>step</code>, <code>pellets</code>, <code>ghosts</code> để các hàm vẽ dùng được.</li>
+  <li><code>episodes</code>: list <code>(bước env, điểm thật cả ván)</code>, lấy từ giá trị <code>scores</code> mà <code>envs.recv(g)</code> trả về.</li>
+  </ul></li>
+<li><strong>Dùng <code>PipelinedEnvs</code></strong>: gọi <code>send(g, action)</code> / <code>recv(g)</code> theo mẫu "gửi nhóm này rồi nhận" để giữ pipeline CPU/GPU (xem <a href="../concepts/parallel-envs.html#pipeline">Env song song và pipeline</a>).</li>
+<li><strong>Có trường <code>reward_fn</code></strong> trong config, mặc định <code>log_reward</code>, và gọi <code>cfg.reward_fn(reward)</code> trên reward thật của mỗi nhóm. Đếm sự kiện bằng <code>count_events(reward)</code> trên reward <em>thật</em>.</li>
+<li><strong>Có <code>log_every</code> và <code>save_every</code></strong>; ghi rõ đơn vị (update hay bước env) trong comment của trường.</li>
+<li><strong>Dọn dẹp</strong>: bắt <code>KeyboardInterrupt</code>, <code>envs.close()</code> trong <code>finally</code>, và lưu <code>state_dict</code> vào <code>save_path</code> khi kết thúc.</li>
+<li><strong>Mạng phải nhận</strong> <code>uint8</code> hình <code>(B, 4, 84, 84)</code> và tự chia 255 (như hai mạng sẵn có).</li>
+</ol>
+
+<h2 id="a2c">Ví dụ: thêm A2C</h2>
+<h3 id="a2c-idea">Khác PPO ở đâu</h3>
+<p>A2C đơn giản hơn PPO: rollout ngắn (mặc định 5 bước mỗi env), tính return n bước, <strong>một</strong> lần cập nhật trên rollout đó (không có epoch hay minibatch hay clip). Vì dùng lại <code>ActorCriticCNN</code> và cùng kiểu rollout như PPO, phần lớn mã là sao chép cấu trúc <code>train_ppo</code> rồi thay phần tính loss.</p>
+<pre class="plain"><code>loss = −mean( log π(a|s) · A )  +  c1 · mean( (V(s) − R)² )  −  c2 · mean( H[π] )
+với  R_t = r_t + γ · (1 − done_t) · R_{t+1},   A = R − V(s)  (không truyền gradient qua A)</code></pre>
+
+<h3 id="a2c-file">Bước 1. Tạo <code>agents/a2c.py</code></h3>
+<pre><code class="language-python">"""A2C (advantage actor-critic đồng bộ) cho Ms. Pacman: rollout ngắn, một lần cập nhật cho mỗi rollout."""
+import time
+from dataclasses import dataclass
+from typing import Callable
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+from ..envs import PipelinedEnvs, count_events, log_reward
+from ..evaluation import ppo_policy, watch
+from ..models import ActorCriticCNN
+from ..utils import get_device, set_seed
+from .common import TrainResult
+
+
+@dataclass
+class A2CConfig:
+    total_steps: int = 2_000_000
+    n_envs: int = 16
+    n_steps: int = 5              # bước mỗi env trong một rollout (batch = n_envs x n_steps)
+    lr: float = 7e-4
+    gamma: float = 0.99
+    c1: float = 0.5               # trọng số value loss
+    c2: float = 0.01              # trọng số entropy bonus
+    max_grad: float = 0.5
+    seed: int = 0
+    log_every: int = 500          # in log mỗi bao nhiêu update
+    save_every: int = 5000        # lưu checkpoint mỗi bao nhiêu update (khi có save_path)
+    reward_fn: Callable = log_reward   # reward thật (mảng n_envs) -&gt; reward dùng để học
+
+
+def train_a2c(cfg=None, *, model=None, save_path=None, device=None, render=False,
+              watch_every=0, watch_episodes=1):
+    """Train A2C, trả về TrainResult(model, log, episodes). Tham số giống train_ppo."""
+    cfg = cfg or A2CConfig()
+    device = device or get_device()
+    set_seed(cfg.seed)
+    envs = PipelinedEnvs(cfg.n_envs, render=render)
+    obs = torch.as_tensor(envs.reset(seed=cfg.seed), device=device)
+
+    model = (model or ActorCriticCNN(envs.n_actions)).to(device)
+    optimizer = optim.RMSprop(model.parameters(), lr=cfg.lr, alpha=0.99, eps=1e-5)
+
+    n_envs, n_steps = cfg.n_envs, cfg.n_steps
+    batch = n_envs * n_steps
+    n_updates = cfg.total_steps // batch
+    B_obs = torch.zeros((n_steps, n_envs, 4, 84, 84), dtype=torch.uint8, device=device)
+    B_act = torch.zeros((n_steps, n_envs), dtype=torch.long, device=device)
+    B_rew = torch.zeros((n_steps, n_envs), device=device)
+    B_done = torch.zeros((n_steps, n_envs), device=device)
+
+    ep_log = []
+    log = {"step": [], "ent": [], "v_loss": [], "pg_loss": [], "pellets": [], "ghosts": []}
+    global_step, t0, n_pellet, n_ghost = 0, time.time(), 0, 0
+    print(f"A2C: {n_updates} updates x {batch} mẫu = {n_updates * batch:,} bước, {n_envs} env song song")
+
+    def launch(t, g):
+        sl = envs.slices[g]
+        a, _, _ = model.act(obs[sl])
+        B_obs[t, sl], B_act[t, sl] = obs[sl], a
+        envs.send(g, a.cpu().numpy())
+
+    try:
+        for update in range(n_updates):
+            # ---- Pha 1: thu rollout (giống PPO: 2 nhóm env xen kẽ với GPU) ----
+            for g in range(envs.G):
+                launch(0, g)
+            for t in range(n_steps):
+                for g in range(envs.G):
+                    sl = envs.slices[g]
+                    next_obs, reward, done, scores = envs.recv(g)
+                    global_step += envs.gs
+                    ep_log.extend((global_step, s) for s in scores)
+                    p, gh = count_events(reward); n_pellet += p; n_ghost += gh
+                    B_rew[t, sl] = torch.as_tensor(cfg.reward_fn(reward), device=device)
+                    B_done[t, sl] = torch.as_tensor(done, dtype=torch.float32, device=device)
+                    obs[sl] = torch.as_tensor(next_obs, device=device)
+                    if t + 1 &lt; n_steps:
+                        launch(t + 1, g)
+
+            # ---- Pha 2: return n bước, nối vào giá trị của critic ở cuối rollout ----
+            with torch.no_grad():
+                ret = model(obs)[1]
+            returns = torch.zeros_like(B_rew)
+            for t in reversed(range(n_steps)):
+                ret = B_rew[t] + cfg.gamma * (1.0 - B_done[t]) * ret
+                returns[t] = ret
+
+            # ---- Pha 3: một lần cập nhật trên cả rollout ----
+            dist, value = model(B_obs.reshape(batch, 4, 84, 84))
+            f_ret = returns.reshape(-1)
+            adv = (f_ret - value).detach()
+            pg_loss = -(dist.log_prob(B_act.reshape(-1)) * adv).mean()
+            v_loss = ((value - f_ret) ** 2).mean()
+            entropy = dist.entropy().mean()
+            loss = pg_loss + cfg.c1 * v_loss - cfg.c2 * entropy
+
+            optimizer.zero_grad()
+            loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), cfg.max_grad)
+            optimizer.step()
+
+            for k, v in zip(log, [global_step, entropy.item(), v_loss.item(), pg_loss.item(), n_pellet, n_ghost]):
+                log[k].append(v)
+
+            if watch_every and global_step // watch_every &gt; (global_step - batch) // watch_every:
+                print(f"[watch] step {global_step:,}")
+                watch(ppo_policy(model, device), watch_episodes)
+
+            if save_path and (update + 1) % cfg.save_every == 0:
+                torch.save(model.state_dict(), save_path)
+
+            if (update + 1) % cfg.log_every == 0 or update == n_updates - 1:
+                recent = [r for _, r in ep_log[-20:]]
+                print(f"Update {update + 1}/{n_updates} | step {global_step:,} | "
+                      f"avg score(20) {np.mean(recent) if recent else float('nan'):.0f} | "
+                      f"viên NL {n_pellet:,} | ma {n_ghost:,} | entropy {entropy.item():.3f} | "
+                      f"{global_step / (time.time() - t0):.0f} steps/s")
+    except KeyboardInterrupt:
+        print(f"Dừng sớm ở step {global_step:,}")
+    finally:
+        envs.close()
+    if save_path:
+        torch.save(model.state_dict(), save_path)
+    return TrainResult(model, log, ep_log)</code></pre>
+
+<h3 id="a2c-notes">Những điểm đáng chú ý trong mã</h3>
+<ul>
+<li><strong>Dataclass config có <code>reward_fn</code>, <code>log_every</code>, <code>save_every</code></strong> như hợp đồng. Giá trị mặc định (lr 7e-4, <code>n_steps=5</code>, RMSprop) lấy theo thiết lập A2C thông dụng trên Atari.</li>
+<li><strong><code>launch</code> và vòng thu rollout</strong> y hệt PPO (nhưng không cần <code>B_logp</code> và <code>B_val</code>, vì A2C tính lại log-prob và value ngay lúc cập nhật).</li>
+<li><strong>Return n bước</strong> nối vào <code>model(obs)[1]</code>, giá trị critic của quan sát cuối rollout.</li>
+<li><strong>Chỉ một lần backward</strong> trên toàn rollout (batch <code>n_envs × n_steps</code> = 80 với mặc định). <code>adv</code> được <code>detach()</code> để gradient của policy không chảy vào critic qua advantage.</li>
+<li><strong>Log</strong> có <code>step</code>, <code>pellets</code>, <code>ghosts</code> (bắt buộc) và thêm <code>ent</code>, <code>v_loss</code>, <code>pg_loss</code>. Dùng khóa <code>ent</code> để biểu đồ entropy mặc định của <code>plot_training</code> cũng hiển thị cho A2C.</li>
+<li><strong>Khi xem</strong> (<code>watch_every</code>) dùng <code>ppo_policy</code> vì A2C dùng cùng mạng actor-critic.</li>
+</ul>
+
+<h3 id="a2c-register">Bước 2. Đăng ký</h3>
+<p><strong><code>agents/__init__.py</code></strong>: để CLI thấy thuật toán.</p>
+<pre><code class="language-python">from .a2c import A2CConfig, train_a2c          # thêm dòng này cùng các import khác
+
+ALGOS = {"ppo": (PPOConfig, train_ppo), "dqn": (DQNConfig, train_dqn), "a2c": (A2CConfig, train_a2c)}
+
+__all__ = ["A2CConfig", "train_a2c", "TrainResult", ...]    # giữ nguyên phần còn lại
+</code></pre>
+<p><strong><code>models/__init__.py</code></strong>: để <code>load_run</code> / <code>load_model</code> dựng lại đúng lớp mạng từ tên thuật toán. A2C dùng lại <code>ActorCriticCNN</code>:</p>
+<pre><code class="language-python">MODEL_CLASSES = {"ppo": ActorCriticCNN, "dqn": QNetwork, "a2c": ActorCriticCNN}
+</code></pre>
+<p><strong><code>cli.py</code></strong>: có hai chỗ <code>choices=["ppo", "dqn"]</code> (lệnh <code>train</code> và vòng lặp tạo <code>eval</code>/<code>play</code>); đổi cả hai thành <code>choices=["ppo", "dqn", "a2c"]</code>. Ngoài ra hàm <code>_policy</code> hiện chỉ biết hai nhánh, và nhánh "không phải ppo" mặc định là DQN, nên A2C sẽ bị chọn nhầm <code>dqn_policy</code> và lỗi. Sửa thành:</p>
+<pre><code class="language-python">def _policy(args, model, device):
+    from .evaluation import dqn_policy, ppo_policy
+    if args.algo == "dqn":
+        return dqn_policy(model, device, eps=args.eps)
+    return ppo_policy(model, device, greedy=args.greedy)       # PPO, A2C: mạng actor-critic
+</code></pre>
+<p><strong>(Tùy chọn) <code>pacman_rl/__init__.py</code></strong>: thêm <code>"A2CConfig", "train_a2c"</code> vào danh sách <code>"agents"</code> trong <code>_EXPORTS</code> để dùng <code>from pacman_rl import train_a2c</code>.</p>
+
+<h3 id="a2c-run">Bước 3. Chạy thử</h3>
+<pre><code class="language-bash">python -m pacman_rl train a2c --steps 4000 --set log_every=20 --name a2c_try --out runs
+python -m pacman_rl eval  a2c --name a2c_try --episodes 1 --greedy
+python -m pacman_rl plot  a2c:a2c_try --out a2c.png
+</code></pre>
+<p>Ba lệnh này đều đã chạy thành công với đúng các thay đổi ở trên. Dòng log đầu tiên có dạng:</p>
+<pre class="plain"><code>A2C: 50 updates x 80 mẫu = 4,000 bước, 16 env song song</code></pre>
+<p>Run chỉ 4,000 bước nên dùng để kiểm tra pipeline, không để xem chất lượng học.</p>
+
+<h3 id="a2c-tests">Bước 4. Viết test (không cần emulator)</h3>
+<p>Test các phần thuần như tính return hoặc hình dạng đầu ra. Gọn nhất là tách phần tính return thành hàm riêng có thể test; ví dụ kiểm tra mạng dùng chung và định dạng log:</p>
+<pre><code class="language-python">from pacman_rl.agents import ALGOS
+from pacman_rl.models import MODEL_CLASSES, ActorCriticCNN
+
+def test_a2c_registered():
+    cfg_cls, train = ALGOS["a2c"]
+    assert cfg_cls().n_steps == 5 and callable(train)
+    assert MODEL_CLASSES["a2c"] is ActorCriticCNN
+</code></pre>
+
+<h2 id="double-dqn">Biến thể nhỏ: Double DQN bằng một cờ</h2>
+<p>Double DQN chỉ khác DQN gốc ở cách tính mục tiêu: chọn action bằng mạng chính, nhưng đánh giá giá trị bằng target network. Việc này chống ước lượng Q quá cao. Không cần file mới.</p>
+<h3 id="double-edit">Sửa <code>agents/dqn.py</code></h3>
+<p>Thêm trường vào <code>DQNConfig</code> (giữ mặc định <code>False</code> để hành vi cũ không đổi):</p>
+<pre><code class="language-python">    max_grad: float = 10.0
+    double: bool = False          # True: Double DQN (chọn action bằng mạng chính, đánh giá bằng target)
+</code></pre>
+<p>Thay dòng tính mục tiêu <code>y = r + cfg.gamma * (1 - d) * q_target(s2).max(1)[0]</code> bằng:</p>
+<pre><code class="language-python">                        if cfg.double:
+                            a2 = q(s2).argmax(1, keepdim=True)
+                            next_q = q_target(s2).gather(1, a2).squeeze(1)
+                        else:
+                            next_q = q_target(s2).max(1)[0]
+                        y = r + cfg.gamma * (1 - d) * next_q
+</code></pre>
+<p>Đoạn này nằm trong khối <code>with torch.no_grad():</code> sẵn có.</p>
+<h3 id="double-run">Chạy</h3>
+<pre><code class="language-bash">python -m pacman_rl train dqn --set double=1 --name dqn_double_s0
+</code></pre>
+<p><code>--set</code> ép kiểu theo kiểu của giá trị mặc định; với trường <code>bool</code>, dùng <code>1</code> hoặc <code>0</code> (không dùng <code>true</code>/<code>false</code>). Cả hai chế độ (<code>double=1</code> và <code>double=0</code>) đã được chạy thử và cho ra log hợp lệ.</p>
+<div class="callout tip">
+<p class="callout-title">Nhớ cập nhật tài liệu</p>
+<p>Thêm một khối tham số <code>double</code> vào <a href="../reference/dqn-config.html">DQNConfig</a> (bảng tóm tắt, và một mục theo mẫu <code>&lt;section class="param"&gt;</code>) và bỏ dòng "không phải Double DQN" ở mục "Những thứ cố định" cùng trang <a href="../concepts/dqn.html#omitted">DQN</a>.</p>
+</div>
+
+<h2 id="checklist">Danh sách kiểm tra trước khi gửi</h2>
+<ul>
+<li>Chạy ngắn bằng CLI thành công: <code>train</code>, <code>eval</code>, <code>plot</code> (và <code>play</code> nếu có màn hình).</li>
+<li>Log có <code>step</code>, <code>pellets</code>, <code>ghosts</code>, cùng độ dài; <code>load_run</code> nạp lại được run vừa lưu.</li>
+<li>Ctrl+C giữa chừng vẫn lưu được kết quả.</li>
+<li>Không import torch trong <code>envs/</code>.</li>
+<li>Test mới trong <code>tests/</code> pass: xem <a href="conventions.html#tests">Quy ước, test, viết docs</a>.</li>
+<li>Docs đã cập nhật: trang tham chiếu config, cột "Một dòng" trong bảng tóm tắt, và <code>nav.js</code> nếu thêm trang.</li>
+</ul>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

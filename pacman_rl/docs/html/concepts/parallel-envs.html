@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Env song song và pipeline · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="concepts/parallel-envs.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Khái niệm</div>
+<h1>Env song song và pipeline</h1>
+<p class="lead">Khi train, pacman_rl chạy 16 game cùng lúc. Đó <strong>không phải</strong> 16 agent hay 16 policy khác nhau: chỉ có một mạng neural, còn 16 game là 16 "con mắt" để thu dữ liệu nhanh hơn và đa dạng hơn.</p>
+
+<h2 id="one-policy">Một policy, nhiều env</h2>
+<p>Mỗi bước thời gian, mạng nhận quan sát của <em>tất cả</em> env, trả về action cho từng env. Dữ liệu từ mọi env được gộp lại để cập nhật <em>cùng một</em> bộ trọng số.</p>
+<figure>
+<svg viewBox="0 0 760 270" role="img" aria-label="16 env gửi quan sát vào một mạng duy nhất, mạng trả về 16 action">
+  <defs><marker id="ah1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--fg-muted)"/></marker></defs>
+  <g>
+    <rect class="svg-a" x="20" y="24" width="150" height="34" rx="9"/><text class="svg-text" x="95" y="46" text-anchor="middle">env 0 (process)</text>
+    <rect class="svg-a" x="20" y="68" width="150" height="34" rx="9"/><text class="svg-text" x="95" y="90" text-anchor="middle">env 1 (process)</text>
+    <rect class="svg-a" x="20" y="112" width="150" height="34" rx="9"/><text class="svg-text" x="95" y="134" text-anchor="middle">env 2 (process)</text>
+    <text class="svg-muted" x="95" y="168" text-anchor="middle">⋮</text>
+    <rect class="svg-a" x="20" y="182" width="150" height="34" rx="9"/><text class="svg-text" x="95" y="204" text-anchor="middle">env 15 (process)</text>
+  </g>
+  <rect class="svg-b" x="300" y="70" width="160" height="110" rx="16"/>
+  <text class="svg-text" x="380" y="108" text-anchor="middle">MỘT mạng</text>
+  <text class="svg-muted" x="380" y="128" text-anchor="middle">một bộ trọng số</text>
+  <text class="svg-muted" x="380" y="146" text-anchor="middle">một optimizer</text>
+  <rect class="svg-c" x="590" y="70" width="150" height="110" rx="16"/>
+  <text class="svg-text" x="665" y="108" text-anchor="middle">Cập nhật</text>
+  <text class="svg-muted" x="665" y="128" text-anchor="middle">batch gộp từ</text>
+  <text class="svg-muted" x="665" y="146" text-anchor="middle">cả 16 env</text>
+  <path class="svg-line" d="M172 41C240 41 240 100 296 100" marker-end="url(#ah1)"/>
+  <path class="svg-line" d="M172 85C240 85 240 112 296 112" marker-end="url(#ah1)"/>
+  <path class="svg-line" d="M172 129C240 129 240 130 296 130" marker-end="url(#ah1)"/>
+  <path class="svg-line" d="M172 199C240 199 240 160 296 160" marker-end="url(#ah1)"/>
+  <text class="svg-muted" x="238" y="258" text-anchor="middle">quan sát (4×84×84) → action</text>
+  <path class="svg-line" d="M462 125H586" marker-end="url(#ah1)"/>
+  <text class="svg-muted" x="524" y="116" text-anchor="middle">dữ liệu</text>
+  <path class="svg-line" d="M665 182C665 238 380 238 380 184" marker-end="url(#ah1)"/>
+  <text class="svg-muted" x="522" y="258" text-anchor="middle">trọng số mới (quay lại mạng)</text>
+</svg>
+<figcaption>Các env không có policy riêng. Sau mỗi lần cập nhật, cả 16 env dùng trọng số mới.</figcaption>
+</figure>
+<p>Cái khác nhau giữa các env chỉ là <em>chúng đang ở trạng thái game nào</em>: mỗi env có seed riêng (<code>seed + chỉ số env</code>) và đi những ván khác nhau. Đó là điều ta muốn.</p>
+
+<div class="callout note">
+<p class="callout-title">Không nhầm với các kỹ thuật "nhiều policy"</p>
+<p>Population-based training, ensemble, self-play hay multi-agent đều giữ nhiều bộ trọng số. pacman_rl không làm vậy. Nếu bạn muốn so sánh nhiều cấu hình, hãy chạy nhiều <em>lần train</em> riêng (mỗi lần có <code>--name</code> và <code>--seed</code> riêng) rồi vẽ chung, xem <a href="../guides/training.html#multi-run">Chạy nhiều seed</a>.</p>
+</div>
+
+<h2 id="why">Vì sao dùng nhiều env</h2>
+<h3 id="why-speed">1. Tốc độ</h3>
+<p>Phần chậm nhất của RL trên Atari là chạy emulator, không phải tính toán trên GPU. Mỗi env là một process riêng (<code>AsyncVectorEnv</code>) nên 16 emulator chạy trên nhiều nhân CPU cùng lúc. GPU thì xử lý một nhóm quan sát trong một lần forward thay vì từng cái một.</p>
+<h3 id="why-stability">2. Dữ liệu ít tương quan hơn (lợi ích về thuật toán)</h3>
+<p>Một env chạy liên tục cho ra các mẫu liền kề rất giống nhau (cùng khung cảnh, cùng đoạn đường). Gradient tính trên dữ liệu như vậy thiên lệch. Ở 16 env, một lát cắt thời gian chứa 16 tình huống độc lập, nên batch đa dạng hơn và việc học PPO ổn định hơn. Với DQN, mỗi vòng cũng thêm 16 chuyển tiếp từ 16 tình huống khác nhau vào replay buffer.</p>
+
+<h2 id="pipeline">Pipeline: CPU và GPU không chờ nhau</h2>
+<p>16 env được chia thành <strong>2 nhóm, mỗi nhóm 8 env</strong>. Mỗi nhóm là một <code>AsyncVectorEnv</code> riêng (8 process con). Hai nhóm chạy so le: trong lúc GPU chọn action cho nhóm này thì emulator của nhóm kia đang chạy.</p>
+<figure>
+<svg viewBox="0 0 760 230" role="img" aria-label="Biểu đồ thời gian: GPU chọn action cho nhóm 0 rồi nhóm 1, trong lúc emulator hai nhóm chạy so le">
+  <text class="svg-text" x="10" y="52">Emulator nhóm 0</text><text class="svg-muted" x="10" y="68">CPU, 8 process</text>
+  <text class="svg-text" x="10" y="112">Emulator nhóm 1</text><text class="svg-muted" x="10" y="128">CPU, 8 process</text>
+  <text class="svg-text" x="10" y="182">GPU</text><text class="svg-muted" x="10" y="198">model.act(...)</text>
+  <line class="svg-line" x1="160" y1="40" x2="160" y2="210" stroke-dasharray="3 4"/>
+  <!-- nhóm 0 -->
+  <rect class="svg-a" x="200" y="34" width="110" height="32" rx="7"/><text class="svg-muted" x="255" y="55" text-anchor="middle">chạy 8 env</text>
+  <rect class="svg-a" x="340" y="34" width="110" height="32" rx="7"/><text class="svg-muted" x="395" y="55" text-anchor="middle">chạy 8 env</text>
+  <rect class="svg-a" x="480" y="34" width="110" height="32" rx="7"/><text class="svg-muted" x="535" y="55" text-anchor="middle">chạy 8 env</text>
+  <!-- nhóm 1 -->
+  <rect class="svg-a" x="230" y="94" width="110" height="32" rx="7"/><text class="svg-muted" x="285" y="115" text-anchor="middle">chạy 8 env</text>
+  <rect class="svg-a" x="370" y="94" width="110" height="32" rx="7"/><text class="svg-muted" x="425" y="115" text-anchor="middle">chạy 8 env</text>
+  <rect class="svg-a" x="510" y="94" width="110" height="32" rx="7"/><text class="svg-muted" x="565" y="115" text-anchor="middle">chạy 8 env</text>
+  <!-- GPU -->
+  <rect class="svg-b" x="170" y="164" width="30" height="32" rx="6"/><text class="svg-muted" x="185" y="184" text-anchor="middle">g0</text>
+  <rect class="svg-b" x="200" y="164" width="30" height="32" rx="6"/><text class="svg-muted" x="215" y="184" text-anchor="middle">g1</text>
+  <rect class="svg-b" x="310" y="164" width="30" height="32" rx="6"/><text class="svg-muted" x="325" y="184" text-anchor="middle">g0</text>
+  <rect class="svg-b" x="340" y="164" width="30" height="32" rx="6"/><text class="svg-muted" x="355" y="184" text-anchor="middle">g1</text>
+  <rect class="svg-b" x="450" y="164" width="30" height="32" rx="6"/><text class="svg-muted" x="465" y="184" text-anchor="middle">g0</text>
+  <rect class="svg-b" x="480" y="164" width="30" height="32" rx="6"/><text class="svg-muted" x="495" y="184" text-anchor="middle">g1</text>
+  <rect class="svg-b" x="590" y="164" width="30" height="32" rx="6"/><text class="svg-muted" x="605" y="184" text-anchor="middle">g0</text>
+  <text class="svg-muted" x="660" y="184">…</text>
+  <text class="svg-muted" x="170" y="222">thời gian →   (ô xanh lục: GPU chọn action cho một nhóm; ô xanh dương: emulator chạy 1 bước)</text>
+</svg>
+<figcaption>Hình minh họa tỷ lệ thời gian chứ không phải số đo thật: emulator thường chậm hơn nhiều so với một lần forward của mạng.</figcaption>
+</figure>
+
+<p>Trong code PPO, mẫu "gửi rồi nhận" là hàm <code>launch</code> và vòng lặp rollout (<code>agents/ppo.py</code>):</p>
+<pre><code class="language-python">def launch(t, g):
+    sl = envs.slices[g]
+    a, logp, value = model.act(obs[sl])               # GPU: chọn action cho nhóm g
+    B_obs[t, sl], B_act[t, sl], B_logp[t, sl], B_val[t, sl] = obs[sl], a, logp, value
+    envs.send(g, a.cpu().numpy())                     # step_async: emulator bắt đầu chạy, không chờ
+
+for g in range(envs.G):                               # khởi động cả hai nhóm
+    launch(0, g)
+for t in range(n_steps):
+    for g in range(envs.G):
+        next_obs, reward, done, scores = envs.recv(g) # step_wait: chờ nhóm g xong bước vừa rồi
+        ...                                           # ghi reward, done, obs mới
+        if t + 1 &lt; n_steps:
+            launch(t + 1, g)                          # chọn action tiếp, gửi đi rồi quay sang nhóm kia
+</code></pre>
+<p>Khi vòng lặp đang tính action cho nhóm 0 trên GPU thì emulator của nhóm 1 (đã được gửi lệnh từ trước) vẫn đang chạy. Với DQN, ngay cả bước cập nhật mạng cũng được xếp vào khoảng thời gian emulator đang chạy.</p>
+
+<h2 id="effects">Số env ảnh hưởng thế nào tới thuật toán</h2>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>PPO</th><th>DQN</th></tr></thead>
+<tbody>
+<tr><td>Một "đơn vị công việc"</td><td>1 update = <code>n_envs × n_steps</code> mẫu (mặc định 2,048)</td><td>1 vòng lặp = <code>n_envs</code> chuyển tiếp mới (mặc định 16)</td></tr>
+<tr><td>Tăng <code>n_envs</code></td><td>Batch to hơn (nếu giữ <code>n_steps</code>), ít update hơn trên cùng <code>total_steps</code>, mẫu đa dạng hơn</td><td>Replay buffer đầy nhanh hơn; mỗi vòng thu nhiều mẫu hơn nên tỷ lệ tái sử dụng giảm trừ khi tăng <code>batch_size</code> hoặc <code>updates_per_iter</code></td></tr>
+<tr><td>Ràng buộc</td><td><code>n_envs</code> chẵn (chia 2 nhóm); nên để <code>n_envs × n_steps</code> chia hết cho <code>n_minibatches</code></td><td><code>n_envs</code> chẵn; <code>buffer_size</code> nên chia hết cho <code>n_envs</code></td></tr>
+</tbody></table></div>
+<p>Vì vậy <code>n_envs</code> không chỉ là nút "chạy nhanh/chậm": đổi nó là đổi kích thước batch của PPO. Nếu bạn giảm <code>n_envs</code> xuống 8 vì máy yếu, hãy cân nhắc tăng <code>n_steps</code> lên 256 để giữ batch 2,048. Chi tiết trong <a href="../guides/hyperparameters.html">Chọn và chỉnh tham số</a>.</p>
+
+<h2 id="seeds">Seed của từng env</h2>
+<p><code>PipelinedEnvs.reset(seed)</code> reset nhóm <code>g</code> với <code>seed + g × (n_envs / 2)</code>. Bên trong, <code>AsyncVectorEnv.reset(seed=s)</code> gán seed <code>s + i</code> cho env thứ <code>i</code> của nhóm. Kết quả: env có chỉ số toàn cục <code>k</code> nhận seed <code>seed + k</code>, mọi env đều khác nhau mà chạy lại với cùng <code>seed</code> thì khởi tạo y hệt.</p>
+<div class="callout warn">
+<p class="callout-title">Cùng seed chưa chắc cho cùng đường học</p>
+<p>Seed cố định chỉ làm các env xuất phát giống nhau. Thứ tự các process nhả kết quả, tính không xác định của GPU và việc lấy mẫu action khiến hai lần chạy cùng seed vẫn lệch nhau. Muốn kết luận về độ tốt của một cấu hình, hãy chạy nhiều seed, đừng chỉ tin một lần.</p>
+</div>
+
+<h2 id="render">Chế độ render</h2>
+<p>Với <code>render=True</code> (<code>--render</code> trên CLI), <code>PipelinedEnvs</code> đổi sang <code>SyncVectorEnv</code>: toàn bộ env chạy tuần tự trong <em>một</em> process, và chỉ env số 0 mở cửa sổ game. Pipeline vẫn còn nhưng không còn song song thật, nên tốc độ giảm mạnh. Chỉ dùng để quan sát, đừng dùng để train thật.</p>
+<p>Nếu chỉ muốn thỉnh thoảng xem agent chơi mà không làm chậm train, dùng <code>watch_every</code> (<code>--watch-every N</code>): cứ mỗi N bước env, training dừng lại để mở một cửa sổ riêng cho agent chơi, rồi tiếp tục.</p>
+
+<h2 id="cost">Chi phí tài nguyên</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Tài nguyên</th><th>Tiêu tốn</th></tr></thead>
+<tbody>
+<tr><td>Process</td><td><code>n_envs</code> process con, cộng process chính. Mỗi process con chỉ import <code>pacman_rl.envs</code> (không có torch) nên nhẹ.</td></tr>
+<tr><td>RAM, PPO</td><td>Rollout nằm trên thiết bị tính toán: <code>n_steps × n_envs × 4 × 84 × 84</code> byte ≈ 58 MB với cấu hình mặc định.</td></tr>
+<tr><td>RAM, DQN</td><td>Replay buffer ≈ <code>buffer_size × 7,080</code> byte (≈ 1.4 GB cho 200,000 mẫu), nằm trong RAM hệ thống.</td></tr>
+<tr><td>CPU</td><td>Tận dụng nhiều nhân. Nhiều process hơn số nhân thật sẽ tranh nhau và không nhanh thêm.</td></tr>
+</tbody></table></div>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

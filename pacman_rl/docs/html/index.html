@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tổng quan · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-root="./" data-page="index.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Tài liệu</div>
+<h1>pacman_rl</h1>
+<p class="lead">Thư viện huấn luyện <strong>PPO</strong> và <strong>DQN</strong> chơi <strong>Ms. Pacman (Atari)</strong> bằng PyTorch và Gymnasium. Một lệnh để train, một lệnh để chấm điểm, một lệnh để vẽ đường học, và đủ chỗ để bạn thêm thuật toán của riêng mình.</p>
+
+<h2 id="what">pacman_rl làm được gì</h2>
+<ul>
+  <li><strong>Train hai thuật toán chuẩn</strong>: PPO (clipped objective + GAE) và DQN gốc (replay buffer + target network). Cả hai dùng chung một thân CNN kiểu Nature DQN.</li>
+  <li><strong>Chạy nhiều env song song</strong>: mặc định 16 env, mỗi env một process, chia 2 nhóm chạy xen kẽ với GPU. Chỉ có <em>một</em> policy; các env chỉ là nơi thu dữ liệu. Xem <a href="concepts/parallel-envs.html">Env song song và pipeline</a>.</li>
+  <li><strong>Chấm điểm công bằng</strong>: đánh giá luôn chạy game đầy đủ 3 mạng với seed cố định và cộng điểm thật, không phải reward đã biến đổi.</li>
+  <li><strong>Lưu và so sánh run</strong>: mỗi lần train ghi ra model, danh sách ván chơi và log; vẽ nhiều run lên cùng một biểu đồ bằng một lệnh.</li>
+  <li><strong>Dễ mở rộng</strong>: thêm thuật toán, chỉ số log, reward hay mạng mới bằng vài file nhỏ, không phải sửa lõi.</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 150" role="img" aria-label="Luồng làm việc: train, file lưu, đánh giá và vẽ">
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--fg-muted)"/></marker></defs>
+  <rect class="svg-a" x="16" y="30" width="200" height="90" rx="14"/>
+  <text class="svg-text" x="116" y="62" text-anchor="middle">1. Train</text>
+  <text class="svg-muted" x="116" y="84" text-anchor="middle">train_ppo / train_dqn</text>
+  <text class="svg-muted" x="116" y="102" text-anchor="middle">hoặc  pacman_rl train</text>
+  <rect class="svg-c" x="280" y="30" width="200" height="90" rx="14"/>
+  <text class="svg-text" x="380" y="62" text-anchor="middle">2. Run trên đĩa</text>
+  <text class="svg-muted" x="380" y="84" text-anchor="middle">{name}.pt</text>
+  <text class="svg-muted" x="380" y="102" text-anchor="middle">_episodes.npy · _log.npy</text>
+  <rect class="svg-b" x="544" y="30" width="200" height="90" rx="14"/>
+  <text class="svg-text" x="644" y="62" text-anchor="middle">3. Dùng kết quả</text>
+  <text class="svg-muted" x="644" y="84" text-anchor="middle">eval · play · plot</text>
+  <text class="svg-muted" x="644" y="102" text-anchor="middle">load_run, so sánh nhiều run</text>
+  <path class="svg-line" d="M218 75H276" marker-end="url(#ah)"/>
+  <path class="svg-line" d="M482 75H540" marker-end="url(#ah)"/>
+</svg>
+<figcaption>Vòng đời một lần thí nghiệm với pacman_rl.</figcaption>
+</figure>
+
+<h2 id="start">Bắt đầu từ đâu</h2>
+<div class="cards">
+  <a class="card" href="getting-started/installation.html"><span class="tag">Mới dùng</span><strong>Cài đặt</strong><span>Tạo môi trường, cài torch bản CUDA, cài pacman_rl và kiểm tra.</span></a>
+  <a class="card" href="getting-started/quickstart.html"><span class="tag">Mới dùng</span><strong>Chạy thử trong 10 phút</strong><span>Train rất ngắn, chấm điểm, vẽ biểu đồ để chắc mọi thứ hoạt động.</span></a>
+  <a class="card" href="guides/training.html"><span class="tag">Huấn luyện</span><strong>Setup và chạy huấn luyện</strong><span>Cấu hình thật, theo dõi, dừng và train tiếp, chạy nhiều seed.</span></a>
+  <a class="card" href="reference/ppo-config.html"><span class="tag">Tham số</span><strong>PPOConfig / DQNConfig</strong><span>Từng tham số: ý nghĩa, công thức, tăng giảm thì sao, khi nào chỉnh.</span></a>
+  <a class="card" href="concepts/ppo.html"><span class="tag">Hiểu thuật toán</span><strong>PPO và DQN trong code</strong><span>Từng bước của thuật toán gắn với đúng dòng code tương ứng.</span></a>
+  <a class="card" href="contributing/add-algorithm.html"><span class="tag">Đóng góp</span><strong>Thêm thuật toán mới</strong><span>Ví dụ chạy được: A2C trong khoảng 130 dòng, và Double DQN bằng một cờ trong config.</span></a>
+</div>
+
+<h2 id="example">Ví dụ nhanh nhất</h2>
+<div class="tabs">
+  <div class="tab" data-title="Dòng lệnh">
+<pre><code class="language-bash">python -m pacman_rl train ppo --steps 2000000     # lưu vào runs/
+python -m pacman_rl eval  ppo --episodes 10       # mean / std / max trên seed cố định
+python -m pacman_rl plot  ppo --out curves.png    # vẽ đường học
+</code></pre>
+  </div>
+  <div class="tab" data-title="Python / notebook">
+<pre><code class="language-python">from pacman_rl import PPOConfig, train_ppo, save_run, get_device
+
+device = get_device()
+result = train_ppo(PPOConfig(total_steps=2_000_000), save_path="ms_pacman_ppo.pt", device=device)
+save_run(result, ".", "ms_pacman_ppo")     # .pt + _episodes.npy + _log.npy
+</code></pre>
+  </div>
+</div>
+
+<h2 id="map">Bản đồ tài liệu</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Phần</th><th>Trả lời câu hỏi</th></tr></thead>
+<tbody>
+<tr><td><strong>Bắt đầu</strong></td><td>Cài thế nào? Chạy thử ra sao? Làm sao biết đã đúng?</td></tr>
+<tr><td><strong>Khái niệm</strong></td><td>Env xử lý ảnh và điểm thế nào? Vì sao có nhiều env? PPO/DQN trong code làm gì từng bước?</td></tr>
+<tr><td><strong>Hướng dẫn</strong></td><td>Làm việc X thì làm thế nào: train, chỉnh tham số, đánh giá, vẽ, thay reward.</td></tr>
+<tr><td><strong>Tham chiếu</strong></td><td>Tra cứu: mọi tham số, mọi tùy chọn dòng lệnh, mọi hàm, mọi khóa trong log.</td></tr>
+<tr><td><strong>Đóng góp</strong></td><td>Mã nguồn được tổ chức ra sao, và thêm thuật toán, chỉ số, reward, mạng thế nào cho đúng quy ước.</td></tr>
+</tbody></table></div>
+
+<div class="callout tip">
+<p class="callout-title">Bấm tên hàm để mở code</p>
+<p>Khi mở docs bằng trình duyệt trực tiếp từ ổ đĩa (<code>file://</code>), mọi tên hàm, lớp, hằng, tham số config và đường dẫn file có dấu <code>↗</code> đều là link mở thẳng đúng dòng trong VS Code, ví dụ <a href="reference/api.html#train_ppo"><code>train_ppo</code></a> trong trang API. Cần cài VS Code; lần đầu trình duyệt sẽ hỏi cho phép mở ứng dụng. Cách hoạt động và cách cập nhật số dòng ở <a href="contributing/conventions.html#docs-source-links">Quy ước, test, viết docs</a>.</p>
+</div>
+
+<div class="callout note">
+<p class="callout-title">Quy ước đơn vị</p>
+<p>Trong toàn bộ tài liệu, <strong>một bước (step)</strong> là một lần agent chọn action, tương ứng 4 frame game (frame-skip 4). Khi nói "2 triệu bước" nghĩa là 2 triệu action, tức 8 triệu frame. Chi tiết ở <a href="concepts/environment.html">Môi trường và các loại điểm</a>.</p>
+</div>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="assets/nav.js"></script>
+<script src="assets/search-index.js"></script>
+<script src="assets/source-index.js"></script>
+<script src="assets/docs.js"></script>
+</body>
+</html>

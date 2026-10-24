@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPO trong pacman_rl · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="concepts/ppo.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Khái niệm</div>
+<h1>PPO trong pacman_rl</h1>
+<p class="lead">PPO (Proximal Policy Optimization) học trực tiếp một policy: thu một mớ dữ liệu bằng policy hiện tại, rồi cập nhật policy sao cho <em>không đi quá xa</em> so với bản cũ. Trang này đi qua từng bước của <code>train_ppo</code> và chỉ ra mỗi tham số của <code>PPOConfig</code> nằm ở đâu trong công thức.</p>
+
+<h2 id="idea">Ý tưởng một đoạn</h2>
+<p>Policy gradient thuần dễ bất ổn: một lần cập nhật hơi lớn có thể phá hỏng policy và dữ liệu sau đó toàn là rác. PPO giải quyết bằng cách đo <strong>tỷ lệ xác suất</strong> giữa policy mới và policy lúc thu dữ liệu, rồi <strong>cắt</strong> tỷ lệ đó trong khoảng <code>[1 − ε, 1 + ε]</code> (<code>ε = clip_eps</code>). Nhờ vậy ta được phép học nhiều epoch trên cùng một rollout mà không sợ policy nhảy quá xa.</p>
+<p>PPO là thuật toán <strong>on-policy</strong>: dữ liệu chỉ dùng cho vài lần cập nhật rồi bỏ đi, rollout kế tiếp thu bằng policy mới. Khác với DQN giữ dữ liệu cũ trong replay buffer.</p>
+
+<h2 id="loop">Vòng lặp ba pha</h2>
+<p>Mỗi vòng <code>for update in range(n_updates)</code> làm ba việc nối nhau:</p>
+<pre class="plain"><code>Pha 1  Thu rollout   n_steps bước x n_envs env, bằng policy hiện tại
+Pha 2  Tính GAE      ước lượng "hành động này tốt hơn trung bình bao nhiêu" (advantage)
+Pha 3  Cập nhật      epochs lần quét rollout, mỗi lần chia n_minibatches phần</code></pre>
+
+<h3 id="phase1">Pha 1: thu rollout</h3>
+<p>Với mỗi bước <code>t</code> và mỗi nhóm env, code gọi <code>model.act(obs)</code> để lấy ba thứ rồi cất vào bộ đệm có hình <code>(n_steps, n_envs, ...)</code>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Bộ đệm</th><th>Nội dung</th><th>Dùng ở</th></tr></thead>
+<tbody>
+<tr><td><code>B_obs</code></td><td>Quan sát <code>(4,84,84)</code> uint8</td><td>Tính lại xác suất ở pha 3</td></tr>
+<tr><td><code>B_act</code></td><td>Action đã chọn</td><td>Pha 3</td></tr>
+<tr><td><code>B_logp</code></td><td><code>log π_old(a|s)</code> lúc chọn</td><td>Mẫu số của tỷ lệ ở pha 3</td></tr>
+<tr><td><code>B_val</code></td><td><code>V_old(s)</code> do critic dự đoán</td><td>GAE (pha 2)</td></tr>
+<tr><td><code>B_rew</code></td><td>Reward học <code>cfg.reward_fn(reward thật)</code></td><td>GAE</td></tr>
+<tr><td><code>B_done</code></td><td>1 nếu bước đó mất mạng hoặc hết game</td><td>GAE</td></tr>
+</tbody></table></div>
+<p>Sau <code>n_steps</code> bước mỗi env, ta có <code>n_envs × n_steps</code> mẫu (mặc định 16 × 128 = 2,048). Việc chia nhóm và chạy xen kẽ với GPU xem ở <a href="parallel-envs.html">Env song song và pipeline</a>.</p>
+
+<h3 id="phase2">Pha 2: GAE</h3>
+<p>Ta cần <em>advantage</em> <code>A_t</code>: hành động tại <code>t</code> tốt hơn mức trung bình của trạng thái đó bao nhiêu. GAE (Generalized Advantage Estimation) tính nó lùi từ cuối rollout về đầu:</p>
+<pre class="plain"><code>δ_t = r_t + γ · V(s_{t+1}) · (1 − done_t) − V(s_t)
+A_t = δ_t + γ · λ · (1 − done_t) · A_{t+1}
+return_t = A_t + V(s_t)         ← mục tiêu để huấn luyện critic</code></pre>
+<p>Trong code (<code>γ = cfg.gamma</code>, <code>λ = cfg.lam</code>):</p>
+<pre><code class="language-python">for t in reversed(range(n_steps)):
+    next_value = last_value if t == n_steps - 1 else B_val[t + 1]
+    nonterm = 1.0 - B_done[t]
+    delta = B_rew[t] + cfg.gamma * next_value * nonterm - B_val[t]
+    gae = delta + cfg.gamma * cfg.lam * nonterm * gae
+    adv[t] = gae
+returns = adv + B_val
+</code></pre>
+<ul>
+<li><code>last_value</code> là <code>V</code> của quan sát cuối rollout (bước <code>n_steps</code>), dùng để "nối" rollout với tương lai chưa thấy.</li>
+<li><code>nonterm = 0</code> khi mất mạng: giá trị tương lai bị cắt, vì sau cái chết agent coi như bắt đầu episode mới. Xem <a href="environment.html#episodic-life">EpisodicLife</a>.</li>
+<li><code>done</code> ở đây là <code>terminated OR truncated</code>. Code không phân biệt hai trường hợp (giới hạn thời gian của game hiếm khi gặp).</li>
+</ul>
+<p><code>γ</code> (gamma) và <code>λ</code> (lam) điều khiển đánh đổi bias/variance: <a href="../reference/ppo-config.html#gamma"><code>gamma</code></a>, <a href="../reference/ppo-config.html#lam"><code>lam</code></a>.</p>
+
+<h3 id="phase3">Pha 3: cập nhật</h3>
+<p>Rollout được "duỗi phẳng" thành <code>batch = n_envs × n_steps</code> mẫu rồi lặp <code>epochs</code> lần: xáo trộn, chia <code>n_minibatches</code> phần, mỗi phần tính một lần gradient.</p>
+<pre class="plain"><code>ratio   = π_new(a|s) / π_old(a|s)               = exp(logp_new − logp_old)
+A       = (A − mean(A)) / (std(A) + 1e-8)       ← chuẩn hóa trong minibatch
+
+pg_loss = −mean( min( ratio · A ,  clip(ratio, 1−ε, 1+ε) · A ) )
+v_loss  =  mean( (V_new(s) − return)² )
+entropy =  mean( H[π_new(·|s)] )
+
+loss    = pg_loss + c1 · v_loss − c2 · entropy</code></pre>
+<div class="table-wrap"><table>
+<thead><tr><th>Thành phần</th><th>Vai trò</th><th>Tham số</th></tr></thead>
+<tbody>
+<tr><td><code>pg_loss</code></td><td>Đẩy xác suất của action tốt lên, action tệ xuống, nhưng bị <em>cắt</em> khi tỷ lệ đã ra ngoài <code>[1−ε, 1+ε]</code> theo hướng có lợi, để gradient không còn thúc tiếp.</td><td><a href="../reference/ppo-config.html#clip_eps"><code>clip_eps</code></a></td></tr>
+<tr><td><code>v_loss</code></td><td>Dạy critic dự đoán return. Critic tốt thì advantage ít nhiễu.</td><td><a href="../reference/ppo-config.html#c1"><code>c1</code></a></td></tr>
+<tr><td><code>entropy</code></td><td>Thưởng cho policy còn ngẫu nhiên, chống việc "chốt" sớm vào một chiến thuật kém.</td><td><a href="../reference/ppo-config.html#c2"><code>c2</code></a></td></tr>
+</tbody></table></div>
+<p>Sau <code>loss.backward()</code> gradient bị cắt chuẩn về <code>max_grad</code> (<code>clip_grad_norm_</code>) rồi mới <code>optimizer.step()</code>.</p>
+
+<h2 id="numbers">Con số của cấu hình mặc định</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Đại lượng</th><th>Công thức</th><th>Giá trị</th></tr></thead>
+<tbody>
+<tr><td>Batch (mẫu mỗi update)</td><td><code>n_envs × n_steps</code></td><td class="num">2,048</td></tr>
+<tr><td>Minibatch</td><td><code>batch // n_minibatches</code></td><td class="num">512</td></tr>
+<tr><td>Số update</td><td><code>total_steps // batch</code></td><td class="num">976</td></tr>
+<tr><td>Số bước env thực sự chạy</td><td><code>n_updates × batch</code></td><td class="num">1,998,848</td></tr>
+<tr><td>Lần tính gradient mỗi update</td><td><code>epochs × n_minibatches</code></td><td class="num">16</td></tr>
+<tr><td>Tổng lần tính gradient</td><td><code>976 × 16</code></td><td class="num">15,616</td></tr>
+</tbody></table></div>
+
+<h2 id="schedules">Lịch giảm lr và các chi tiết triển khai</h2>
+<ul>
+<li><strong>Learning rate giảm tuyến tính về 0</strong>: ở update <code>u</code>, <code>lr = cfg.lr × (1 − u / n_updates)</code>. Đầu run học mạnh, cuối run tinh chỉnh nhẹ.</li>
+<li><strong>Adam</strong> với <code>eps=1e-5</code> (không phải 1e-8 mặc định của PyTorch), theo thiết lập chuẩn của PPO trên Atari.</li>
+<li><strong>Khởi tạo trực giao</strong>: thân CNN dùng gain <code>√2</code>; lớp actor dùng gain <code>0.01</code> để policy ban đầu gần như đều (entropy ≈ ln 9); lớp critic dùng gain 1.</li>
+<li><strong>Chọn action bằng Gumbel-max</strong> trong <code>ActorCriticCNN.act</code>: cộng nhiễu Gumbel vào logit rồi lấy argmax. Cùng phân phối với <code>Categorical.sample()</code> nhưng ít phép toán hơn nên nhanh hơn khi gọi từng bước nhỏ.</li>
+<li><strong>Chỉ số log</strong> (<code>kl</code>, <code>clipfrac</code>, <code>v_loss</code>, <code>pg_loss</code>, <code>ent</code>) lấy từ <em>minibatch cuối cùng</em> của update, đủ để thấy xu hướng. Ý nghĩa và cách đọc ở <a href="../guides/plotting.html#read-ppo">Vẽ biểu đồ, đọc log</a>.</li>
+</ul>
+
+<h2 id="omitted">Những gì bản PPO này không có</h2>
+<p>Để bạn không kỳ vọng nhầm, đây là các thành phần hay gặp ở các bản PPO khác nhưng <strong>không có</strong> trong <code>train_ppo</code>:</p>
+<ul>
+<li>Không chuẩn hóa reward theo độ lệch chuẩn chạy; thay vào đó dùng biến đổi <code>log1p</code> cố định.</li>
+<li>Không cắt value loss (không có "value clipping").</li>
+<li>Không giảm dần <code>clip_eps</code>; nó cố định cả run (chỉ lr giảm).</li>
+<li>Không dừng sớm epoch khi KL vượt ngưỡng; luôn chạy đủ <code>epochs</code>.</li>
+<li>Không có mạng hồi quy (LSTM); trí nhớ ngắn hạn đến từ việc chồng 4 frame.</li>
+</ul>
+<p>Muốn thêm một trong các thứ trên, xem <a href="../contributing/add-algorithm.html">Thêm thuật toán mới</a> (hoặc thêm cờ vào <code>PPOConfig</code> như hướng dẫn ở đó).</p>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

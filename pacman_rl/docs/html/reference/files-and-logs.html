@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>File lưu và log · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="reference/files-and-logs.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Tham chiếu</div>
+<h1>File lưu và log</h1>
+<p class="lead">Một lần train ghi ra ba file. Trang này mô tả định dạng từng file, từng khóa trong <code>log</code>, và các đơn vị khác nhau giữa PPO và DQN.</p>
+
+<h2 id="files">Một run gồm ba file</h2>
+<p>Run tên <code>NAME</code> trong thư mục <code>DIR</code>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Nội dung</th><th>Ghi lúc nào</th></tr></thead>
+<tbody>
+<tr><td><code>NAME.pt</code></td><td><code>state_dict</code> của mạng (PyTorch)</td><td>Giữa chừng (checkpoint) và khi kết thúc</td></tr>
+<tr><td><code>NAME_episodes.npy</code></td><td>Mảng <code>(N, 2)</code>: mỗi hàng là <code>(bước env, điểm thật cả ván)</code> cho một ván đã kết thúc</td><td>Khi kết thúc (qua <code>save_run</code>)</td></tr>
+<tr><td><code>NAME_log.npy</code></td><td>Dict các chỉ số theo thời gian (lưu bằng pickle)</td><td>Khi kết thúc (qua <code>save_run</code>)</td></tr>
+</tbody></table></div>
+<p>Định dạng này trùng với notebook cũ (<code>ms_pacman_ppo.pt</code>, <code>ms_pacman_ppo_episodes.npy</code>, ...) nên nạp lại được kết quả đã train trước khi có thư viện: <code>load_run("notebooks", "ms_pacman_ppo", "ppo")</code>.</p>
+
+<h3 id="read-python">Đọc run trong Python</h3>
+<pre><code class="language-python">import numpy as np
+from pacman_rl import load_run
+
+result = load_run("runs", "ms_pacman_ppo", "ppo")       # TrainResult(model, log, episodes)
+model, log, episodes = result
+
+steps = np.array(log["step"])
+entropy = np.array(log["ent"])
+games = np.array(episodes)                                 # (N, 2): cột 0 là bước, cột 1 là điểm
+print("Số ván:", len(games), "| điểm 20 ván cuối:", games[-20:, 1].mean())
+</code></pre>
+
+<div class="callout warn">
+<p class="callout-title">Chỉ nạp file từ nguồn tin cậy</p>
+<p><code>_log.npy</code> được nạp với <code>allow_pickle=True</code> và <code>.pt</code> dùng <code>torch.load</code>; cả hai có thể thực thi mã tùy ý nếu file bị cài độc. Đừng nạp run lấy từ người lạ.</p>
+</div>
+
+<h3 id="not-saved">Những gì không được lưu</h3>
+<ul>
+<li><strong>Cấu hình</strong> (siêu tham số) không nằm trong file nào. CLI in config ở dòng đầu khi train; hãy ghi lại, ví dụ <code>python -m pacman_rl train ppo ... | tee ppo_s0.txt</code> hoặc đặt tên run mô tả được cấu hình (<code>ppo_c2_0.02_s0</code>).</li>
+<li><strong>Optimizer, bước hiện tại, lịch lr, replay buffer</strong> không được lưu. Vì vậy chưa thể "resume" chính xác; xem <a href="../guides/training.html#resume">Train tiếp từ model có sẵn</a>.</li>
+</ul>
+
+<h2 id="units">Đơn vị: update hay bước env?</h2>
+<p>PPO và DQN đếm tiến độ khác nhau. Đây là nguồn nhầm lẫn thường gặp nhất:</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>PPO</th><th>DQN</th></tr></thead>
+<tbody>
+<tr><td><code>log_every</code></td><td><strong>update</strong> (mặc định 50 ≈ 102,400 bước)</td><td><strong>bước env</strong> (mặc định 100,000)</td></tr>
+<tr><td><code>save_every</code></td><td><strong>update</strong> (mặc định 200 ≈ 409,600 bước)</td><td><strong>bước env</strong> (mặc định 500,000)</td></tr>
+<tr><td>Chỉ số vào <code>log</code></td><td>Mỗi update (không phụ thuộc <code>log_every</code>)</td><td>Mỗi <code>log_every</code> bước env</td></tr>
+<tr><td>Số điểm trong <code>log</code> (mặc định)</td><td>976</td><td>100</td></tr>
+</tbody></table></div>
+<p>Trong <code>log</code> và <code>episodes</code>, trục "step" luôn là <strong>bước env</strong> ở cả hai thuật toán, nên vẽ chung được.</p>
+
+<h2 id="log-keys">Các khóa trong <code>log</code></h2>
+<p><code>log</code> là dict, mỗi khóa là một list, mọi list cùng độ dài với <code>log["step"]</code>.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Khóa</th><th>PPO</th><th>DQN</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>step</code></td><td>có</td><td>có</td><td>Bước env tại thời điểm ghi.</td></tr>
+<tr><td><code>pellets</code></td><td>có</td><td>có</td><td>Tổng tích lũy số viên năng lượng đã ăn (từ đầu run).</td></tr>
+<tr><td><code>ghosts</code></td><td>có</td><td>có</td><td>Tổng tích lũy số ma đã ăn.</td></tr>
+<tr><td><code>ent</code></td><td>có</td><td>-</td><td>Entropy trung bình của policy (minibatch cuối của update).</td></tr>
+<tr><td><code>kl</code></td><td>có</td><td>-</td><td>Xấp xỉ KL giữa policy cũ và mới: <code>mean(logp_old − logp_new)</code> trên minibatch cuối. Có thể âm nhẹ do nhiễu lấy mẫu.</td></tr>
+<tr><td><code>clipfrac</code></td><td>có</td><td>-</td><td>Tỷ lệ mẫu có <code>|ratio − 1| &gt; clip_eps</code> (bị cắt) ở minibatch cuối.</td></tr>
+<tr><td><code>v_loss</code></td><td>có</td><td>-</td><td>Value loss (MSE) của minibatch cuối.</td></tr>
+<tr><td><code>pg_loss</code></td><td>có</td><td>-</td><td>Policy loss của minibatch cuối.</td></tr>
+<tr><td><code>loss</code></td><td>-</td><td>có</td><td>Huber loss trung bình từ lần ghi trước. <code>nan</code> nếu chưa học (còn trong <code>learning_starts</code>).</td></tr>
+<tr><td><code>q_mean</code></td><td>-</td><td>có</td><td>Q trung bình của các action đã chọn, trung bình từ lần ghi trước. <code>nan</code> nếu chưa học.</td></tr>
+<tr><td><code>eps</code></td><td>-</td><td>có</td><td>Epsilon tại thời điểm ghi.</td></tr>
+</tbody></table></div>
+<p>Cách đọc các chỉ số này để chẩn đoán run: <a href="../guides/plotting.html#read-ppo">Vẽ biểu đồ, đọc log</a>. Thêm chỉ số mới: <a href="../contributing/extend-components.html#add-metric">Thêm chỉ số vào log</a>.</p>
+
+<h2 id="episodes"><code>episodes</code></h2>
+<p>Danh sách <code>(bước env, điểm)</code> cho mỗi <strong>ván hoàn chỉnh</strong> (đủ 3 mạng) đã kết thúc trong lúc train. "Bước env" là bước toàn cục lúc ván kết thúc. Điểm là điểm thật (không biến đổi). Mất mạng giữa chừng không tạo ra mục mới.</p>
+<p><code>avg score(20)</code> trong dòng log chính là trung bình của 20 mục cuối của danh sách này.</p>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

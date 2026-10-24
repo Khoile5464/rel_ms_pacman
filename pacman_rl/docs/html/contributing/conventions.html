@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quy ước, test, viết docs · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="contributing/conventions.html">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Đóng góp</div>
+<h1>Quy ước, test, viết docs</h1>
+<p class="lead">Những quy ước giúp mã mới trông và hoạt động như mã sẵn có, cách chạy test, và cách viết hay sửa chính bộ tài liệu này.</p>
+
+<h2 id="style">Quy ước viết code</h2>
+<ul>
+<li><strong><code>envs/</code> không import torch</strong> và không import từ module nào có torch. Lý do ở <a href="architecture.html#no-torch">Kiến trúc</a>.</li>
+<li><strong>Config là dataclass</strong> chỉ chứa siêu tham số; tùy chọn chạy (<code>model</code>, <code>save_path</code>, <code>device</code>, <code>render</code>...) là keyword của hàm train.</li>
+<li><strong>Hàm train in log bằng <code>print</code></strong>, không dùng tqdm, để đọc được cả trong notebook và terminal.</li>
+<li><strong>Comment và docstring bằng tiếng Việt</strong>, theo phong cách notebook gốc. Comment giải thích <em>vì sao</em> hoặc nêu đơn vị, không lặp lại điều code đã nói.</li>
+<li><strong>Đơn vị rõ ràng</strong>: mọi tham số tính theo "update" hay "bước env" phải ghi trong comment của trường (xem <code>log_every</code> của <code>PPOConfig</code> và <code>DQNConfig</code>).</li>
+<li><strong>Giữ hành vi mặc định khi thêm tính năng</strong>: trường mới phải có giá trị mặc định bảo toàn kết quả cũ.</li>
+<li><strong>Đặt hàm ở cấp module</strong> (hoặc dùng <code>partial</code>) thay vì <code>lambda</code> khi hàm cần đi qua process con hay được ghi lại.</li>
+</ul>
+
+<div class="callout warn">
+<p class="callout-title">In tiếng Việt trên console Windows</p>
+<p>Console Windows mặc định dùng cp1252 và không in được tiếng Việt: gọi <code>train_ppo(...)</code> trong một script có thể dừng với <code>UnicodeEncodeError</code>. Dòng lệnh <code>python -m pacman_rl</code> đã tự đổi sang UTF-8 (<code>cli.main</code>), notebook thì không bị. Với script riêng, chạy bằng <code>python -X utf8 script.py</code> hoặc đặt biến môi trường <code>PYTHONUTF8=1</code>.</p>
+</div>
+
+<h2 id="tests">Test</h2>
+<p>Test nằm ở <code>tests/</code>, <strong>không cần emulator</strong> nên chạy nhanh. Cần cài pytest (một lần):</p>
+<pre><code class="language-bash">pip install -e "pacman_rl[dev]"      # hoặc: pip install pytest
+pytest pacman_rl                     # chạy từ thư mục rel_ms_pacman/
+</code></pre>
+<p>Test hiện có trong <code>tests/test_core.py</code>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Test</th><th>Kiểm tra</th></tr></thead>
+<tbody>
+<tr><td><code>test_log_reward_and_events</code></td><td><code>log_reward</code> đúng công thức; <code>count_events</code> đếm đúng viên năng lượng và ma</td></tr>
+<tr><td><code>test_network_shapes</code></td><td>Hình dạng đầu ra của <code>ActorCriticCNN</code> (forward và <code>act</code>) và <code>QNetwork</code></td></tr>
+<tr><td><code>test_replay_buffer_stacks_within_episode</code></td><td>Chồng 4 frame lặp frame đầu episode, bắt đầu mới ở episode mới, không trộn giữa các env</td></tr>
+<tr><td><code>test_save_load_run_roundtrip</code></td><td><code>save_run</code> rồi <code>load_run</code> trả về đúng log, episodes và trọng số</td></tr>
+</tbody></table></div>
+
+<h3 id="write-tests">Viết test mới</h3>
+<ul>
+<li>Test phần <strong>thuần</strong>: biến đổi reward, hình dạng tensor, logic buffer, lưu/nạp. Tránh gọi <code>make_env</code> hay <code>train_*</code> (cần emulator, chậm).</li>
+<li>Dùng dữ liệu nhỏ có đáp án tính tay được (như test buffer: frame ghi ở bước <code>t</code> của env <code>e</code> có giá trị <code>10e + t</code>).</li>
+<li>Dùng fixture <code>tmp_path</code> của pytest cho mọi thứ ghi ra đĩa.</li>
+<li>Thêm test khi sửa lỗi, để lỗi đó không quay lại.</li>
+</ul>
+<pre><code class="language-python">import numpy as np
+from pacman_rl.envs import log_reward
+
+def test_log_reward_is_monotonic():
+    r = log_reward([0, 10, 50, 200, 1600])
+    assert np.all(np.diff(r) &gt; 0)
+</code></pre>
+<p>Ngoài test tự động, mọi thay đổi chạm vào vòng train nên có một lần chạy ngắn bằng CLI (<code>train</code>, <code>eval</code>, <code>plot</code>) để xác nhận cả chuỗi vẫn hoạt động.</p>
+
+<h2 id="docs">Viết và sửa tài liệu này</h2>
+<p>Tài liệu là các file HTML tĩnh trong <code>docs/html/</code>, không cần công cụ build. Mở <code>index.html</code> bằng trình duyệt là xem được (kể cả khi mở thẳng file). Thanh bên, mục lục trang, tìm kiếm, nút copy và chuyển sáng/tối đều do <code>assets/docs.js</code> dựng, nên mỗi trang chỉ cần nội dung.</p>
+
+<h3 id="docs-new">Thêm một trang</h3>
+<ol class="steps">
+<li><h4>Sao chép một trang gần giống</h4>
+<p>Ví dụ <code>guides/evaluation.html</code>. Sửa <code>&lt;title&gt;</code>, <code>h1</code>, nội dung.</p></li>
+<li><h4>Đặt <code>data-root</code> và <code>data-page</code> ở thẻ <code>&lt;body&gt;</code></h4>
+<pre><code class="language-html">&lt;body data-root="../" data-page="guides/ten-trang.html"&gt;
+</code></pre>
+<p><code>data-root</code> là đường dẫn tương đối từ trang về <code>docs/html/</code> (<code>./</code> cho trang gốc, <code>../</code> cho trang trong thư mục con). <code>data-page</code> khớp với <code>path</code> trong <code>nav.js</code>.</p></li>
+<li><h4>Khai báo trong <code>assets/nav.js</code></h4>
+<pre><code class="language-javascript">{ path: "guides/ten-trang.html", title: "Tên hiển thị" }
+</code></pre>
+<p>Thứ tự trong <code>nav.js</code> cũng là thứ tự "Trước/Tiếp" ở cuối trang.</p></li>
+<li><h4>Cho mọi <code>h2</code>/<code>h3</code> một <code>id</code> duy nhất</h4>
+<p>Id dùng cho mục lục bên phải, neo liên kết và tìm kiếm.</p></li>
+<li><h4>Sinh lại chỉ mục tìm kiếm và kiểm tra liên kết</h4>
+<pre><code class="language-bash">cd pacman_rl/docs/html
+python build_search_index.py     # ghi assets/search-index.js; cảnh báo nếu tiêu đề thiếu id
+python check_links.py            # báo link và neo (#...) bị gãy
+</code></pre></li>
+</ol>
+
+<h3 id="docs-components">Các thành phần có sẵn</h3>
+<p>Dùng đúng các lớp CSS này để trang mới nhìn đồng nhất:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Thành phần</th><th>Markup</th></tr></thead>
+<tbody>
+<tr><td>Hộp lưu ý</td><td><code>&lt;div class="callout note|tip|warn|danger"&gt;&lt;p class="callout-title"&gt;Tiêu đề&lt;/p&gt;&lt;p&gt;...&lt;/p&gt;&lt;/div&gt;</code></td></tr>
+<tr><td>Khối code</td><td><code>&lt;pre&gt;&lt;code class="language-python|bash|powershell"&gt;...&lt;/code&gt;&lt;/pre&gt;</code> (tự tô màu, có nút Copy). Văn bản thường: <code>&lt;pre class="plain"&gt;&lt;code&gt;...&lt;/code&gt;&lt;/pre&gt;</code></td></tr>
+<tr><td>Bảng</td><td>Bọc <code>&lt;table&gt;</code> trong <code>&lt;div class="table-wrap"&gt;</code> để cuộn ngang trên màn hình nhỏ</td></tr>
+<tr><td>Tab</td><td><code>&lt;div class="tabs"&gt;&lt;div class="tab" data-title="Tên"&gt;...&lt;/div&gt;...&lt;/div&gt;</code></td></tr>
+<tr><td>Các bước</td><td><code>&lt;ol class="steps"&gt;&lt;li&gt;&lt;h4&gt;Tiêu đề bước&lt;/h4&gt;...&lt;/li&gt;&lt;/ol&gt;</code></td></tr>
+<tr><td>Thẻ liên kết</td><td><code>&lt;div class="cards"&gt;&lt;a class="card" href="..."&gt;&lt;span class="tag"&gt;...&lt;/span&gt;&lt;strong&gt;...&lt;/strong&gt;&lt;span&gt;...&lt;/span&gt;&lt;/a&gt;&lt;/div&gt;</code></td></tr>
+<tr><td>Hình / sơ đồ</td><td><code>&lt;figure&gt;&lt;svg&gt;...&lt;/svg&gt;&lt;figcaption&gt;...&lt;/figcaption&gt;&lt;/figure&gt;</code>; SVG dùng lớp <code>svg-box|svg-a|svg-b|svg-c|svg-text|svg-muted|svg-line</code> để đúng màu ở cả hai giao diện</td></tr>
+</tbody></table></div>
+
+<h3 id="docs-param">Mẫu một khối tham số</h3>
+<pre><code class="language-html">&lt;section class="param"&gt;
+&lt;h3 id="ten_tham_so"&gt;&lt;code&gt;ten_tham_so&lt;/code&gt; &lt;span class="type"&gt;int&lt;/span&gt; &lt;span class="default"&gt;mặc định 128&lt;/span&gt;&lt;/h3&gt;
+&lt;p&gt;Một hai câu nói tham số là gì.&lt;/p&gt;
+&lt;dl&gt;
+&lt;dt&gt;Điều khiển&lt;/dt&gt;&lt;dd&gt;...&lt;/dd&gt;
+&lt;dt&gt;Tăng&lt;/dt&gt;&lt;dd&gt;...&lt;/dd&gt;
+&lt;dt&gt;Giảm&lt;/dt&gt;&lt;dd&gt;...&lt;/dd&gt;
+&lt;dt&gt;Khi nào chỉnh&lt;/dt&gt;&lt;dd&gt;...&lt;/dd&gt;
+&lt;/dl&gt;
+&lt;/section&gt;
+</code></pre>
+
+<h3 id="docs-source-links">Link mở code trong VS Code</h3>
+<p>Bạn không cần viết thẻ <code>&lt;a&gt;</code> nào. Khi docs được mở bằng <code>file://</code>, <code>docs.js</code> tự biến mỗi <code>&lt;code&gt;</code> <em>inline</em> có nội dung đúng bằng một tên có trong <code>assets/source-index.js</code> thành link <code>vscode://file/&lt;đường dẫn&gt;:&lt;dòng&gt;</code>. Tên được nhận gồm:</p>
+<ul>
+<li>hàm và lớp ở cấp module (<code>train_ppo</code>, <code>PipelinedEnvs</code>), hằng viết hoa (<code>ALGOS</code>, <code>N_ACTIONS</code>);</li>
+<li>đường dẫn file tính từ <code>src/pacman_rl/</code> (<code>agents/ppo.py</code>, <code>cli.py</code>);</li>
+<li>trên trang <code>ppo-config.html</code> và <code>dqn-config.html</code>, tiêu đề của mỗi khối tham số được nối với trường dataclass tương ứng (nhờ thuộc tính <code>data-cfg</code> ở <code>&lt;body&gt;</code>).</li>
+</ul>
+<p><code>source-index.js</code> do <code>build_search_index.py</code> sinh bằng cách quét <code>src/pacman_rl/</code>. <strong>Sau khi code đổi (số dòng dịch), chạy lại script đó</strong> để link trỏ đúng dòng. Code trong khối <code>&lt;pre&gt;</code> và chữ nằm trong một link có sẵn thì không bị biến thành link. Muốn tránh một chữ bị tự link, bọc nó trong <code>&lt;a href="#"&gt;</code> hoặc đổi cách viết.</p>
+
+<h3 id="docs-style">Phong cách viết</h3>
+<ul>
+<li><strong>Bám theo code</strong>: mọi con số mặc định và công thức phải khớp mã nguồn. Sửa code thì sửa docs trong cùng thay đổi.</li>
+<li><strong>Nói rõ mức độ chắc chắn</strong>: phân biệt "đã đo/đã chạy" với "kinh nghiệm chung". Đừng đưa số liệu không có thật.</li>
+<li><strong>Đơn vị đi kèm con số</strong>: bước env, update, byte, giây.</li>
+<li><strong>Một ví dụ chạy được</strong> đáng giá hơn một đoạn mô tả. Trước khi đưa code vào tài liệu, hãy chạy nó.</li>
+</ul>
+
+<h2 id="pr-checklist">Danh sách kiểm tra khi gửi thay đổi</h2>
+<ul>
+<li>Hành vi mặc định không đổi (trừ khi chủ ý, và khi đó ghi rõ).</li>
+<li><code>pytest pacman_rl</code> pass; thêm test cho phần mới.</li>
+<li>Chạy ngắn bằng CLI: <code>train</code>, <code>eval</code>, <code>plot</code>.</li>
+<li><code>envs/</code> vẫn không import torch.</li>
+<li>Tài liệu cập nhật; <code>build_search_index.py</code> và <code>check_links.py</code> chạy sạch.</li>
+</ul>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>

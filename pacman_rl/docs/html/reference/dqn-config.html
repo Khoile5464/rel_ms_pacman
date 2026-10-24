@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DQNConfig · pacman_rl</title>
+<script>try{var t=localStorage.getItem('pacman-docs-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-root="../" data-page="reference/dqn-config.html" data-cfg="DQNConfig">
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Mục lục"></nav>
+<main class="content"><article class="doc">
+
+<div class="eyebrow">Tham chiếu</div>
+<h1>DQNConfig</h1>
+<p class="lead">Mọi siêu tham số của <code>train_dqn</code>. Khác với PPO, DQN tính phần lớn các mốc (log, lưu, cập nhật target) theo <strong>bước env</strong>, và có thêm nhóm tham số của replay buffer và epsilon.</p>
+
+<pre><code class="language-python">from pacman_rl import DQNConfig
+
+cfg = DQNConfig(total_steps=10_000_000, buffer_size=200_000, lr=1e-4)
+</code></pre>
+<p>Cột "Tăng / Giảm" là xu hướng chung trong RL, chưa được kiểm chứng riêng trên dự án này; hãy xác nhận bằng nhiều seed. Thuật toán được giải thích ở <a href="../concepts/dqn.html">DQN trong pacman_rl</a>.</p>
+
+<h2 id="summary">Bảng tóm tắt</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Tham số</th><th>Mặc định</th><th>Đơn vị</th><th>Một dòng</th></tr></thead>
+<tbody>
+<tr><td><a href="#total_steps"><code>total_steps</code></a></td><td class="num">10,000,000</td><td>bước env</td><td>Tổng số bước</td></tr>
+<tr><td><a href="#n_envs"><code>n_envs</code></a></td><td class="num">16</td><td>env</td><td>Số env song song (mẫu mới mỗi vòng)</td></tr>
+<tr><td><a href="#buffer_size"><code>buffer_size</code></a></td><td class="num">200,000</td><td>mẫu</td><td>Dung lượng replay buffer</td></tr>
+<tr><td><a href="#batch_size"><code>batch_size</code></a></td><td class="num">128</td><td>mẫu</td><td>Cỡ minibatch mỗi lần học</td></tr>
+<tr><td><a href="#updates_per_iter"><code>updates_per_iter</code></a></td><td class="num">1</td><td>lần / vòng</td><td>Số lần học mỗi vòng thu</td></tr>
+<tr><td><a href="#lr"><code>lr</code></a></td><td class="num">1e-4</td><td>-</td><td>Learning rate của Adam (cố định)</td></tr>
+<tr><td><a href="#gamma"><code>gamma</code></a></td><td class="num">0.99</td><td>-</td><td>Hệ số chiết khấu</td></tr>
+<tr><td><a href="#learning_starts"><code>learning_starts</code></a></td><td class="num">20,000</td><td>bước env</td><td>Thu thập bao nhiêu trước khi học</td></tr>
+<tr><td><a href="#target_update"><code>target_update</code></a></td><td class="num">10,000</td><td>bước env</td><td>Chu kỳ sao chép sang target network</td></tr>
+<tr><td><a href="#eps_start"><code>eps_start</code></a></td><td class="num">1.0</td><td>-</td><td>Epsilon ban đầu</td></tr>
+<tr><td><a href="#eps_end"><code>eps_end</code></a></td><td class="num">0.05</td><td>-</td><td>Epsilon thấp nhất</td></tr>
+<tr><td><a href="#eps_frac"><code>eps_frac</code></a></td><td class="num">0.05</td><td>tỷ lệ</td><td>Phần đầu của run dùng để giảm epsilon</td></tr>
+<tr><td><a href="#max_grad"><code>max_grad</code></a></td><td class="num">10.0</td><td>-</td><td>Cắt chuẩn gradient</td></tr>
+<tr><td><a href="#seed"><code>seed</code></a></td><td class="num">0</td><td>-</td><td>Seed ngẫu nhiên</td></tr>
+<tr><td><a href="#log_every"><code>log_every</code></a></td><td class="num">100,000</td><td>bước env</td><td>Ghi/in log</td></tr>
+<tr><td><a href="#save_every"><code>save_every</code></a></td><td class="num">500,000</td><td>bước env</td><td>Lưu checkpoint</td></tr>
+<tr><td><a href="#reward_fn"><code>reward_fn</code></a></td><td><code>log_reward</code></td><td>-</td><td>Biến đổi reward</td></tr>
+</tbody></table></div>
+
+<h2 id="derived">Đại lượng dẫn xuất</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Đại lượng</th><th>Công thức</th><th>Mặc định</th></tr></thead>
+<tbody>
+<tr><td>Số vòng lặp <code>n_iters</code></td><td><code>total_steps // n_envs</code></td><td class="num">625,000</td></tr>
+<tr><td>Tỷ lệ tái sử dụng (replay ratio)</td><td><code>updates_per_iter × batch_size / n_envs</code></td><td class="num">8</td></tr>
+<tr><td>Bước epsilon giảm</td><td><code>int(eps_frac × total_steps)</code></td><td class="num">500,000</td></tr>
+<tr><td>Số bước mỗi cột của buffer</td><td><code>buffer_size // n_envs</code></td><td class="num">12,500</td></tr>
+<tr><td>Bộ nhớ buffer</td><td><code>buffer_size × 7,080</code> byte</td><td class="num">≈ 1.4 GB</td></tr>
+</tbody></table></div>
+
+<h2 id="scale">Quy mô chạy</h2>
+
+<section class="param">
+<h3 id="total_steps"><code>total_steps</code> <span class="type">int</span> <span class="default">mặc định 10,000,000</span></h3>
+<p>Tổng số bước env cho cả lần train (1 bước = 1 action = 4 frame). Số vòng lặp là <code>total_steps // n_envs</code>, phần dư bị bỏ.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Độ dài run <em>và</em> độ dài đoạn giảm epsilon (vì <code>eps_frac</code> là tỷ lệ của tổng này).</dd>
+<dt>Tăng</dt><dd>Nhiều thời gian học hơn; epsilon giảm chậm hơn theo số bước tuyệt đối.</dd>
+<dt>Giảm</dt><dd>Chạy nhanh để thử. Epsilon cũng giảm nhanh hơn theo số bước tuyệt đối vì đoạn giảm co lại theo tổng.</dd>
+<dt>Khi nào chỉnh</dt><dd>Mọi lần. Để tham khảo, DQN gốc (Nature 2015) train 50 triệu frame, tức khoảng 12.5 triệu bước.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="n_envs"><code>n_envs</code> <span class="type">int</span> <span class="default">mặc định 16</span></h3>
+<p>Số env song song; mỗi vòng lặp thu đúng <code>n_envs</code> chuyển tiếp mới (một từ mỗi env). Phải chẵn. Xem <a href="../concepts/parallel-envs.html">Env song song và pipeline</a>.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Tốc độ thu dữ liệu, và cùng với <code>batch_size</code>, <code>updates_per_iter</code> quyết định tỷ lệ tái sử dụng.</dd>
+<dt>Tăng</dt><dd>Thu nhanh hơn, buffer đa dạng hơn; <strong>tỷ lệ tái sử dụng giảm</strong> nếu giữ nguyên <code>batch_size</code> và <code>updates_per_iter</code> (mỗi mẫu được học lại ít lần hơn).</dd>
+<dt>Giảm</dt><dd>Nhẹ máy, tỷ lệ tái sử dụng tăng, nhưng thu chậm.</dd>
+<dt>Khi nào chỉnh</dt><dd>Theo số nhân CPU và RAM. Đổi <code>n_envs</code> thì xem lại <a href="../guides/hyperparameters.html#dqn-ratio">replay ratio</a>.</dd>
+</dl>
+</section>
+
+<h2 id="buffer">Replay buffer và minibatch</h2>
+
+<section class="param">
+<h3 id="buffer_size"><code>buffer_size</code> <span class="type">int</span> <span class="default">mặc định 200,000</span></h3>
+<p>Số chuyển tiếp tối đa buffer giữ. Đầy thì ghi đè mẫu cũ nhất. Mỗi mẫu tốn khoảng 7,080 byte RAM.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Độ "dài trí nhớ" của agent và độ đa dạng của dữ liệu học.</dd>
+<dt>Tăng</dt><dd>Giảm tương quan giữa các mẫu, giữ được trải nghiệm hiếm lâu hơn. Tốn RAM tuyến tính: 1,000,000 mẫu ≈ 7 GB. Mẫu cũ có thể lỗi thời so với policy hiện tại.</dd>
+<dt>Giảm</dt><dd>Tiết kiệm RAM, dữ liệu mới hơn nhưng ít đa dạng; dễ bất ổn hơn.</dd>
+<dt>Khi nào chỉnh</dt><dd>Khi RAM không đủ (giảm) hoặc khi có nhiều RAM trống (tăng). Nên chia hết cho <code>n_envs</code>. Phải lớn hơn <code>learning_starts</code>.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="batch_size"><code>batch_size</code> <span class="type">int</span> <span class="default">mặc định 128</span></h3>
+<p>Số mẫu rút từ buffer cho mỗi lần tính gradient.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Độ nhiễu của gradient và (cùng với <code>updates_per_iter</code>, <code>n_envs</code>) tỷ lệ tái sử dụng.</dd>
+<dt>Tăng</dt><dd>Gradient mượt hơn, nhưng mỗi bước học tốn thời gian hơn; tăng tỷ lệ tái sử dụng.</dd>
+<dt>Giảm</dt><dd>Nhanh hơn mỗi bước, gradient nhiễu hơn, giảm tỷ lệ tái sử dụng.</dd>
+<dt>Khi nào chỉnh</dt><dd>Mặc định 128 được chọn để cho tỷ lệ tái sử dụng 8 với 16 env. Đổi <code>n_envs</code> thì đổi <code>batch_size</code> theo tỷ lệ để giữ 8.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="updates_per_iter"><code>updates_per_iter</code> <span class="type">int</span> <span class="default">mặc định 1</span></h3>
+<p>Số lần tính gradient (mỗi lần một minibatch <code>batch_size</code>) trong mỗi vòng lặp, sau khi đã thu <code>n_envs</code> mẫu.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Cân bằng giữa "thu thêm" và "học lại". Là cách khác để đổi tỷ lệ tái sử dụng mà không đổi cỡ minibatch.</dd>
+<dt>Tăng</dt><dd>Học nhiều hơn trên cùng lượng dữ liệu (mẫu hiệu quả hơn) nhưng chậm hơn và có nguy cơ bất ổn.</dd>
+<dt>Giảm</dt><dd>Không thể thấp hơn 1 nếu muốn học (0 nghĩa là không học).</dd>
+<dt>Khi nào chỉnh</dt><dd>Khi muốn tăng tốc độ học theo bước env, đổi đây thay vì <code>batch_size</code> để giữ minibatch cố định.</dd>
+</dl>
+</section>
+
+<h2 id="optim">Tối ưu hóa và mục tiêu</h2>
+
+<section class="param">
+<h3 id="lr"><code>lr</code> <span class="type">float</span> <span class="default">mặc định 1e-4</span></h3>
+<p>Learning rate của Adam. Cố định suốt run (không có lịch giảm như PPO).</p>
+<dl>
+<dt>Tăng</dt><dd>Học nhanh hơn, dễ bất ổn: loss nhảy, <code>q_mean</code> phát nổ.</dd>
+<dt>Giảm</dt><dd>Ổn định hơn nhưng chậm.</dd>
+<dt>Khi nào chỉnh</dt><dd>Khi <code>q_mean</code> tăng vô độ hoặc loss không ổn định, thử giảm.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="gamma"><code>gamma</code> <span class="type">float</span> <span class="default">mặc định 0.99</span></h3>
+<p>Hệ số chiết khấu trong mục tiêu Bellman <code>y = r + γ(1 − done)·max Q_target(s')</code>. Chân trời hiệu dụng khoảng <code>1/(1 − γ)</code> ≈ 100 bước.</p>
+<dl>
+<dt>Tăng</dt><dd>Nhìn xa hơn nhưng Q lớn hơn và khó ổn định.</dd>
+<dt>Giảm</dt><dd>Thiển cận hơn, dễ học hơn.</dd>
+<dt>Khi nào chỉnh</dt><dd>Hiếm. 0.99 là chuẩn.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="max_grad"><code>max_grad</code> <span class="type">float</span> <span class="default">mặc định 10.0</span></h3>
+<p>Ngưỡng cắt chuẩn gradient trước <code>optimizer.step()</code>. Cao hơn PPO (0.5) vì loss Huber đã giới hạn gradient theo mẫu.</p>
+<dl>
+<dt>Khi nào chỉnh</dt><dd>Hiếm. Hạ xuống nếu loss có những cú nhảy lớn đột ngột.</dd>
+</dl>
+</section>
+
+<h2 id="schedule">Lịch học và target network</h2>
+
+<section class="param">
+<h3 id="learning_starts"><code>learning_starts</code> <span class="type">int</span> <span class="default">mặc định 20,000</span></h3>
+<p>Số bước env chỉ thu thập (chưa học) ở đầu run, để buffer có đủ mẫu trước khi rút minibatch.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Mạng không học trên một buffer gần như trống và lặp đi lặp lại vài mẫu giống nhau.</dd>
+<dt>Tăng</dt><dd>Buffer đa dạng hơn lúc bắt đầu, học khởi động muộn hơn.</dd>
+<dt>Giảm</dt><dd>Học sớm nhưng trên dữ liệu ít ỏi. Không nên đặt thấp hơn vài trăm: buffer cần ít nhất vài bước thời gian mới rút mẫu được.</dd>
+<dt>Khi nào chỉnh</dt><dd>Run thử ngắn thì giảm cho tương xứng (ví dụ 500 với run vài nghìn bước). Phải nhỏ hơn <code>buffer_size</code>.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="target_update"><code>target_update</code> <span class="type">int</span> <span class="default">mặc định 10,000</span></h3>
+<p>Cứ mỗi bấy nhiêu bước env, sao chép trọng số mạng chính sang target network (cập nhật "cứng").</p>
+<dl>
+<dt>Điều khiển</dt><dd>Độ "đứng yên" của mục tiêu học. Mục tiêu đổi liên tục dễ làm Q dao động hoặc phân kỳ.</dd>
+<dt>Tăng</dt><dd>Mục tiêu ổn định hơn nhưng phản ánh tiến bộ chậm hơn.</dd>
+<dt>Giảm</dt><dd>Mục tiêu bám sát mạng hiện tại, học nhanh hơn nhưng kém ổn định.</dd>
+<dt>Khi nào chỉnh</dt><dd>Nếu <code>q_mean</code> phát nổ hoặc loss dao động mạnh thì thử tăng.</dd>
+</dl>
+</section>
+
+<h2 id="epsilon">Khám phá (epsilon-greedy)</h2>
+<p>Epsilon giảm tuyến tính từ <code>eps_start</code> xuống <code>eps_end</code> trong <code>eps_frac × total_steps</code> bước đầu, rồi giữ ở <code>eps_end</code>. Ba tham số sau cùng định hình đường cong này.</p>
+
+<section class="param">
+<h3 id="eps_start"><code>eps_start</code> <span class="type">float</span> <span class="default">mặc định 1.0</span></h3>
+<p>Xác suất chọn action ngẫu nhiên lúc bắt đầu. 1.0 nghĩa là hoàn toàn ngẫu nhiên.</p>
+<dl>
+<dt>Khi nào chỉnh</dt><dd>Khi train tiếp từ model đã học (<code>model=...</code>): đặt thấp (như 0.1), nếu không agent bị ép chơi ngẫu nhiên lại từ đầu.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="eps_end"><code>eps_end</code> <span class="type">float</span> <span class="default">mặc định 0.05</span></h3>
+<p>Xác suất ngẫu nhiên tối thiểu, giữ đến hết run.</p>
+<dl>
+<dt>Tăng</dt><dd>Khám phá mãi nhiều hơn; điểm lúc train bị kéo xuống vì một phần ε số action vẫn là ngẫu nhiên.</dd>
+<dt>Giảm</dt><dd>Khai thác nhiều hơn nhưng có thể kẹt trong thói quen.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="eps_frac"><code>eps_frac</code> <span class="type">float</span> <span class="default">mặc định 0.05</span></h3>
+<p>Phần trăm (dạng tỷ lệ) của <code>total_steps</code> dùng để giảm epsilon. Mặc định 5% của 10 triệu = 500,000 bước.</p>
+<dl>
+<dt>Tăng</dt><dd>Khám phá ngẫu nhiên kéo dài hơn.</dd>
+<dt>Giảm</dt><dd>Chuyển sang khai thác sớm hơn.</dd>
+<dt>Khi nào chỉnh</dt><dd>Nhớ rằng đoạn giảm tính theo tỷ lệ của <code>total_steps</code>: đổi <code>total_steps</code> thì đoạn giảm cũng đổi theo.</dd>
+</dl>
+</section>
+
+<h2 id="infra">Tái lập, ghi log, lưu</h2>
+
+<section class="param">
+<h3 id="seed"><code>seed</code> <span class="type">int</span> <span class="default">mặc định 0</span></h3>
+<p>Seed cho <code>random</code>, <code>numpy</code>, <code>torch</code> và các env (env thứ <code>k</code> dùng <code>seed + k</code>). Trên CLI dùng <code>--seed</code>.</p>
+</section>
+
+<section class="param">
+<h3 id="log_every"><code>log_every</code> <span class="type">int</span> <span class="default">mặc định 100,000</span></h3>
+<p>Ghi một điểm vào <code>log</code> và in một dòng mỗi bấy nhiêu <strong>bước env</strong>. Các chỉ số <code>loss</code>, <code>q_mean</code> là trung bình từ lần ghi trước.</p>
+<dl>
+<dt>Lưu ý</dt><dd>Khác PPO, ở DQN <code>log_every</code> quyết định luôn số điểm của đường cong. Nếu <code>total_steps &lt; log_every</code> thì <code>log</code> rỗng (không có điểm nào). Với run thử ngắn hãy đặt <code>log_every</code> nhỏ.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="save_every"><code>save_every</code> <span class="type">int</span> <span class="default">mặc định 500,000</span></h3>
+<p>Lưu checkpoint <code>.pt</code> (trọng số mạng chính) mỗi bấy nhiêu <strong>bước env</strong> khi có <code>save_path</code>.</p>
+</section>
+
+<section class="param">
+<h3 id="reward_fn"><code>reward_fn</code> <span class="type">Callable</span> <span class="default">mặc định log_reward</span></h3>
+<p>Hàm nhận mảng reward thật của một nhóm env và trả về reward học, giống PPO. Không đặt được từ CLI. Xem <a href="../guides/reward-shaping.html">Reward shaping</a>.</p>
+</section>
+
+<h2 id="fixed">Những thứ cố định, không phải tham số</h2>
+<ul>
+<li><strong>Hàm loss</strong>: Huber (<code>smooth_l1_loss</code>), không phải MSE.</li>
+<li><strong>Cập nhật target</strong>: sao chép cứng định kỳ, không phải trung bình trượt (Polyak).</li>
+<li><strong>Mục tiêu</strong>: <code>max</code> của target network, không phải Double DQN.</li>
+<li><strong>Optimizer</strong>: Adam với tham số mặc định của PyTorch (ngoài <code>lr</code>).</li>
+</ul>
+
+</article></main>
+<aside class="toc" id="toc" aria-label="Trên trang này"></aside>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/search-index.js"></script>
+<script src="../assets/source-index.js"></script>
+<script src="../assets/docs.js"></script>
+</body>
+</html>
