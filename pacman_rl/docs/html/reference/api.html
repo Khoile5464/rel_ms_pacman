@@ -138,10 +138,11 @@ random_baseline(n_episodes=5, n_actions=9)                  -&gt; list[float]</c
 </ul>
 
 <h2 id="runs">pacman_rl.runs</h2>
-<pre class="plain"><code>save_run(result, directory, name)            -&gt; (path_model, path_episodes, path_log)
+<pre class="plain"><code>save_run(result, directory, name, append=True) -&gt; (path_model, path_episodes, path_log)
 load_run(directory, name, algo, device="cpu") -&gt; TrainResult
 load_model(path, algo, device="cpu", n_actions=N_ACTIONS) -&gt; nn.Module  # chế độ eval
 run_paths(directory, name)                   -&gt; (path_model, path_episodes, path_log)</code></pre>
+<p><code>save_run</code> với <code>append=True</code> (mặc định): nếu run <code>name</code> đã có trong <code>directory</code> thì episodes và log của lần train này được <strong>nối vào sau</strong> kết quả cũ, bước env tiếp nối từ bước cuối của lần cũ (các chỉ số tích luỹ <code>pellets</code>, <code>ghosts</code> cũng cộng tiếp); model <code>.pt</code> luôn được ghi đè bằng bản mới nhất. Chưa có run cùng tên thì tạo mới. <code>append=False</code> ghi đè hoàn toàn. Đừng gọi <code>save_run</code> hai lần với cùng một <code>result</code>, sẽ bị nối trùng.</p>
 <p><code>algo</code> là <code>"ppo"</code> hoặc <code>"dqn"</code>. <code>load_run</code> chấp nhận thiếu file log/episodes (trả về rỗng, chỉ còn model). Định dạng file ở <a href="files-and-logs.html#files">File lưu và log</a>.</p>
 
 <h2 id="plotting">pacman_rl.plotting</h2>

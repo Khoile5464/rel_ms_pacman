@@ -25,6 +25,7 @@
 <tr><td><code>NAME_episodes.npy</code></td><td>Mảng <code>(N, 2)</code>: mỗi hàng là <code>(bước env, điểm thật cả ván)</code> cho một ván đã kết thúc</td><td>Khi kết thúc (qua <code>save_run</code>)</td></tr>
 <tr><td><code>NAME_log.npy</code></td><td>Dict các chỉ số theo thời gian (lưu bằng pickle)</td><td>Khi kết thúc (qua <code>save_run</code>)</td></tr>
 </tbody></table></div>
+<p>Gọi <code>save_run</code> vào một <code>NAME</code> đã tồn tại sẽ nối <code>_episodes.npy</code> và <code>_log.npy</code> vào sau dữ liệu cũ (bước env tiếp nối, nên vẽ biểu đồ liền mạch), còn <code>.pt</code> được ghi đè. Truyền <code>append=False</code> để ghi đè hoàn toàn.</p>
 <p>Định dạng này trùng với notebook cũ (<code>ms_pacman_ppo.pt</code>, <code>ms_pacman_ppo_episodes.npy</code>, ...) nên nạp lại được kết quả đã train trước khi có thư viện: <code>load_run("notebooks", "ms_pacman_ppo", "ppo")</code>.</p>
 
 <h3 id="read-python">Đọc run trong Python</h3>

@@ -21,13 +21,41 @@ def run_paths(directory, name):
     return d / f"{name}.pt", d / f"{name}_episodes.npy", d / f"{name}_log.npy"
 
 
-def save_run(result, directory, name):
-    """Lưu TrainResult (hoặc tuple (model, log, episodes)), trả về 3 đường dẫn đã ghi."""
+def _merge(old_log, old_eps, log, episodes):
+    """Nối lần train mới vào sau lần cũ: bước env của lần mới được cộng thêm offset (= bước cuối của lần cũ),
+    các chỉ số tích luỹ (pellets, ghosts) cộng tiếp từ giá trị cuối của lần cũ."""
+    old_steps = old_log.get("step") or []
+    offset = max(old_steps[-1] if old_steps else 0, old_eps[-1][0] if len(old_eps) else 0)
+    merged = {}
+    for k in set(old_log) | set(log):
+        a, b = list(old_log.get(k, [])), list(log.get(k, []))
+        if k == "step":
+            b = [x + offset for x in b]
+        elif k in ("pellets", "ghosts") and a:
+            b = [x + a[-1] for x in b]
+        merged[k] = a + b
+    eps = np.array(episodes, dtype=float).reshape(-1, 2)
+    eps[:, 0] += offset
+    return merged, np.concatenate([np.asarray(old_eps, dtype=float).reshape(-1, 2), eps])
+
+
+def save_run(result, directory, name, append=True):
+    """Lưu TrainResult (hoặc tuple (model, log, episodes)), trả về 3 đường dẫn đã ghi.
+
+    Nếu run `name` đã tồn tại trong `directory` và append=True thì episodes / log của lần train này được NỐI vào
+    sau kết quả cũ (bước env tiếp nối từ bước cuối của lần cũ); model luôn ghi đè bằng bản mới nhất.
+    Run chưa tồn tại thì tạo mới. Đừng gọi save_run hai lần với cùng một result, sẽ bị nối trùng.
+    append=False: ghi đè hoàn toàn."""
     model, log, episodes = result
     Path(directory).mkdir(parents=True, exist_ok=True)
     p_model, p_eps, p_log = run_paths(directory, name)
+    eps = np.array(episodes).reshape(-1, 2)
+    if append and (p_eps.exists() or p_log.exists()):
+        old_eps = np.load(p_eps) if p_eps.exists() else np.empty((0, 2))
+        old_log = np.load(p_log, allow_pickle=True).item() if p_log.exists() else {}
+        log, eps = _merge(old_log, old_eps, log, episodes)
     torch.save(model.state_dict(), p_model)
-    np.save(p_eps, np.array(episodes).reshape(-1, 2))
+    np.save(p_eps, eps)
     np.save(p_log, log, allow_pickle=True)
     return p_model, p_eps, p_log
 

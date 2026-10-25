@@ -133,7 +133,7 @@ new = train_ppo(cfg, model=old.model, save_path="runs/ppo_cont.pt", device=devic
 <li>Optimizer (Adam) bắt đầu lại từ trạng thái trống.</li>
 <li><strong>PPO</strong>: lịch lr chạy lại từ <code>cfg.lr</code> về 0 trong <code>total_steps</code> mới. Nên đặt <code>lr</code> thấp hơn lần đầu.</li>
 <li><strong>DQN</strong>: replay buffer rỗng, <code>learning_starts</code> đếm lại, và epsilon lại bắt đầu từ <code>eps_start = 1.0</code> (tức agent chơi ngẫu nhiên trở lại!). Hãy đặt <code>eps_start</code> thấp (ví dụ <code>0.1</code>) khi train tiếp.</li>
-<li>Đường cong của lần train mới bắt đầu lại từ bước 0; <code>save_run</code> ra tên khác để không đè run cũ.</li>
+<li>Đường cong của lần train mới tự bắt đầu lại từ bước 0, nhưng <code>save_run(new, "runs", "ppo")</code> vào đúng tên run cũ sẽ <strong>nối</strong> episodes và log vào sau run cũ (bước env được cộng offset nên biểu đồ liền mạch). Muốn tách riêng thì lưu ra tên khác, hoặc truyền <code>append=False</code> để ghi đè.</li>
 </ul>
 </div>
 
