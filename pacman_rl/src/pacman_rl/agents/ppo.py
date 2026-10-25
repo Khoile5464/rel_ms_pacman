@@ -1,6 +1,7 @@
 """PPO (clipped objective + GAE) cho Ms. Pacman, siêu tham số theo thiết lập chuẩn cho Atari."""
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -47,6 +48,9 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
     cfg = cfg or PPOConfig()
     device = device or get_device()
     set_seed(cfg.seed)
+    if save_path:
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)   # tạo thư mục từ đầu, tránh train xong mới lỗi khi lưu
     envs = PipelinedEnvs(cfg.n_envs, render=render)
     obs = torch.as_tensor(envs.reset(seed=cfg.seed), device=device)
 
