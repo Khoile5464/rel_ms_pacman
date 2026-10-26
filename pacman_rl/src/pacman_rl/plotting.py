@@ -19,14 +19,23 @@ def score_curve(episodes, w=20):
 
 
 def events_per_bin(log, total=None, bin_size=100_000):
-    """Từ tổng tích luỹ log["pellets"], log["ghosts"] -> số sự kiện trong mỗi khoảng bin_size bước."""
+    """Từ tổng tích luỹ log["pellets"], log["ghosts"] (và "deaths" nếu có) -> số sự kiện trong mỗi khoảng bin_size bước.
+    Thêm out["steps"]: số bước env thật sự nằm trong mỗi bin (bin cuối có thể ngắn hơn bin_size)."""
     total = total or log["step"][-1]
     edges = np.arange(0, total + bin_size, bin_size)
     out = {}
-    for key in ("pellets", "ghosts"):
-        cum = np.interp(edges, np.r_[0, log["step"]], np.r_[0, log[key]])
-        out[key] = np.diff(cum)
+    for key in ("pellets", "ghosts", "deaths"):
+        if key in log:
+            cum = np.interp(edges, np.r_[0, log["step"]], np.r_[0, log[key]])
+            out[key] = np.diff(cum)
+    out["steps"] = np.diff(np.minimum(edges, log["step"][-1]))
     return edges[1:], out
+
+
+def per_life(ev, key):
+    """Số `key` ("steps", "pellets", "ghosts") trung bình mỗi lượt chơi (một mạng) trong từng bin; bin không ai chết -> NaN."""
+    d = ev["deaths"]
+    return np.divide(ev[key], d, out=np.full_like(d, np.nan, dtype=float), where=d > 0)
 
 
 def plot_scores(runs, random_scores=None, w=20, ax=None):
@@ -79,16 +88,28 @@ def plot_events(runs, total=None, bin_size=100_000, axes=None):
     return axes
 
 
-def plot_training(runs, random_scores=None, save_path=None, show=True):
-    """Tổng hợp: điểm, entropy (PPO), sự kiện ăn được. Trả về Figure."""
-    fig, ax = plt.subplots(1, 3, figsize=(18, 4.5))
+def plot_training(runs, random_scores=None, save_path=None, show=True, bin_size=100_000):
+    """Tổng hợp 2x3: điểm, entropy (PPO), bước sống / lượt, viên năng lượng / lượt, ma / lượt, ma trên mỗi viên.
+    "Lượt" = một mạng (kết thúc khi chết); các biểu đồ theo lượt tính trong từng bin `bin_size` bước, giống dòng log của
+    train_ppo. Run không có log["deaths"] (lưu từ bản cũ) thì bỏ qua ba biểu đồ theo lượt. Trả về Figure."""
+    fig, axes = plt.subplots(2, 3, figsize=(18, 9))
+    ax = axes.ravel()
     plot_scores(runs, random_scores, ax=ax[0])
     plot_metric(runs, "ent", "Entropy của policy (PPO)", ax=ax[1])
     for i, (name, (_, log, _)) in enumerate(runs.items()):
-        if log.get("step"):
-            x, ev = events_per_bin(log)
-            ax[2].plot(x, ev["ghosts"] / np.maximum(ev["pellets"], 1), color=_color(name, i), label=name)
-    ax[2].set(title="Ma ăn được trên mỗi viên năng lượng", xlabel="Bước env"); ax[2].legend()
+        if not log.get("step"):
+            continue
+        x, ev = events_per_bin(log, bin_size=bin_size)
+        c = _color(name, i)
+        if "deaths" in ev:
+            for a, key in zip(ax[2:5], ("steps", "pellets", "ghosts")):
+                a.plot(x, per_life(ev, key), color=c, label=name)
+        ax[5].plot(x, ev["ghosts"] / np.maximum(ev["pellets"], 1), color=c, label=name)
+    for a, title in zip(ax[2:], ("Bước sống mỗi lượt (mỗi mạng)", "Viên năng lượng ăn được mỗi lượt",
+                                 "Ma ăn được mỗi lượt", "Ma ăn được trên mỗi viên năng lượng")):
+        a.set(title=title, xlabel="Bước env")
+        if a.get_legend_handles_labels()[0]:
+            a.legend()
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, dpi=150)
