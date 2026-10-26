@@ -47,6 +47,13 @@ train_ppo(cfg, save_path="runs/ppo_penalty.pt")
 <p>So với thang reward học (chấm 0.69), phạt 0.02 mỗi bước là nhỏ nhưng cộng dồn: sau 100 bước không ăn gì là −2. Phạt quá lớn khiến agent thấy "chết sớm" rẻ hơn "sống mà không ăn", và nó sẽ học cách lao vào ma. Hãy bắt đầu nhỏ (0.01 đến 0.02) và theo dõi điểm cùng biểu đồ ma/viên.</p>
 </div>
 
+<h2 id="death-penalty">Ví dụ: phạt mất mạng (<code>death_penalty</code>)</h2>
+<p>Không cần viết hàm. Cả <code>PPOConfig</code> và <code>DQNConfig</code> có trường <code>death_penalty</code> (mặc định <code>0.0</code>). Ở bước agent vừa mất một mạng, trainer tính <code>reward_học = reward_fn(reward) - death_penalty * died</code>, với <code>died</code> lấy từ <code>PipelinedEnvs.recv</code> (dựa trên <code>info["life_lost"]</code> do <code>EpisodicLife</code> ghi).</p>
+<pre><code class="language-python">cfg = PPOConfig(death_penalty=2.5)
+train_ppo(cfg, save_path="runs/ppo_death.pt")
+</code></pre>
+<p>Như mọi reward shaping, phạt này chỉ đổi reward học; điểm báo cáo, <code>pellets</code>, <code>ghosts</code> vẫn tính từ reward thật. Thang tham chiếu: viên năng lượng ≈ 1.79, ma ≈ 3.0 đến 5.1, nên 1 đến 3 là mức hợp lý để bắt đầu.</p>
+
 <h2 id="stateful">Ví dụ 2: phạt khi "đứng bí" (cần trạng thái)</h2>
 <p>Ý tưởng: không phạt đều mỗi bước, chỉ phạt khi một env đã đi quá <code>patience</code> bước liên tiếp mà không có reward dương. Ít can thiệp hơn phạt đều. Việc này cần <em>nhớ</em> số bước đứng bí của từng env, nên một hàm thuần không đủ; ta dùng một object có <code>__call__</code>.</p>
 <pre><code class="language-python">import numpy as np
@@ -93,7 +100,7 @@ if __name__ == "__main__":
 <li>Bọc nó trong <code>make_env</code> chỉ khi <code>episodic_life=True</code> (lúc học). Đánh giá gọi <code>make_env()</code> không có cờ đó nên không bị ảnh hưởng.</li>
 <li>Cho <code>PipelinedEnvs.recv</code> trả thêm phần shaping để trainer cộng vào reward học.</li>
 </ol>
-<p>Việc này sửa chữ ký <code>recv</code> nên chạm tới cả hai trainer; xem <a href="../contributing/extend-components.html">Thêm chỉ số, reward, mạng</a> để biết các quy ước khi sửa lõi.</p>
+<p>Việc này sửa chữ ký <code>recv</code> (hiện đã trả thêm <code>died</code> cho <code>death_penalty</code>) nên chạm tới cả hai trainer; xem <a href="../contributing/extend-components.html">Thêm chỉ số, reward, mạng</a> để biết các quy ước khi sửa lõi.</p>
 
 <h2 id="compare">So sánh có kiểm soát</h2>
 <ol>

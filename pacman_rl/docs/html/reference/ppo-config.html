@@ -42,6 +42,7 @@ cfg = PPOConfig(total_steps=2_000_000, n_envs=16, lr=2.5e-4)   # chỉ ghi các 
 <tr><td><a href="#log_every"><code>log_every</code></a></td><td class="num">50</td><td>Ghi/lưu</td><td>In log mỗi N update</td></tr>
 <tr><td><a href="#save_every"><code>save_every</code></a></td><td class="num">200</td><td>Ghi/lưu</td><td>Lưu checkpoint mỗi N update</td></tr>
 <tr><td><a href="#reward_fn"><code>reward_fn</code></a></td><td><code>log_reward</code></td><td>Reward</td><td>Biến đổi reward thật thành reward học</td></tr>
+<tr><td><a href="#death_penalty"><code>death_penalty</code></a></td><td class="num">0.0</td><td>Reward</td><td>Trừ điểm reward học khi mất mạng</td></tr>
 </tbody></table></div>
 
 <h2 id="derived">Đại lượng dẫn xuất</h2>
@@ -236,6 +237,15 @@ cfg = PPOConfig(total_steps=2_000_000, n_envs=16, lr=2.5e-4)   # chỉ ghi các 
 <dl>
 <dt>Điều khiển</dt><dd>Chỉ reward học. Điểm báo cáo, số viên năng lượng và số ma vẫn tính từ reward thật.</dd>
 <dt>Lưu ý</dt><dd>Không đặt được từ CLI (<code>--set reward_fn=...</code> bị từ chối). Dùng Python. Hàm là hàm thuần, không giữ trạng thái; xem <a href="../guides/reward-shaping.html">Reward shaping</a> để biết cách làm khi cần trạng thái.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="death_penalty"><code>death_penalty</code> <span class="type">float</span> <span class="default">mặc định 0.0</span></h3>
+<p>Số điểm trừ khỏi <strong>reward học</strong> ở bước agent vừa mất một mạng: <code>reward_học = reward_fn(reward) - death_penalty * died</code>. Mặc định 0 là không phạt.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Chỉ reward học (cùng thang với <code>reward_fn</code>: chấm nhỏ ≈ 0.69, viên năng lượng ≈ 1.79). Điểm báo cáo, số viên năng lượng và số ma vẫn tính từ reward thật.</dd>
+<dt>Khi nào chỉnh</dt><dd>Khi agent hay lao vào ma. Giá trị thử: 1 đến 3. Phạt quá lớn khiến agent né ma quá mức và đứng yên.</dd>
 </dl>
 </section>
 

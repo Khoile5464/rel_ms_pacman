@@ -50,10 +50,10 @@
 <li><strong>Trả về <a href="../reference/api.html#TrainResult"><code>TrainResult(model, log, episodes)</code></strong>.
   <ul>
   <li><code>log</code>: dict khóa → list, mọi list cùng độ dài với <code>log["step"]</code> (bước env). <strong>Phải có</strong> <code>step</code>, <code>pellets</code>, <code>ghosts</code> để các hàm vẽ dùng được.</li>
-  <li><code>episodes</code>: list <code>(bước env, điểm thật cả ván)</code>, lấy từ giá trị <code>scores</code> mà <code>envs.recv(g)</code> trả về.</li>
+  <li><code>episodes</code>: list <code>(bước env, điểm thật cả ván)</code>, lấy từ giá trị <code>scores</code> (phần tử thứ tư; phần tử thứ năm là <code>died</code>) mà <code>envs.recv(g)</code> trả về.</li>
   </ul></li>
 <li><strong>Dùng <code>PipelinedEnvs</code></strong>: gọi <code>send(g, action)</code> / <code>recv(g)</code> theo mẫu "gửi nhóm này rồi nhận" để giữ pipeline CPU/GPU (xem <a href="../concepts/parallel-envs.html#pipeline">Env song song và pipeline</a>).</li>
-<li><strong>Có trường <code>reward_fn</code></strong> trong config, mặc định <code>log_reward</code>, và gọi <code>cfg.reward_fn(reward)</code> trên reward thật của mỗi nhóm. Đếm sự kiện bằng <code>count_events(reward)</code> trên reward <em>thật</em>.</li>
+<li><strong>Có trường <code>reward_fn</code></strong> trong config, mặc định <code>log_reward</code>, và gọi <code>cfg.reward_fn(reward)</code> trên reward thật của mỗi nhóm, rồi trừ <code>cfg.death_penalty * died</code>. Đếm sự kiện bằng <code>count_events(reward)</code> trên reward <em>thật</em>.</li>
 <li><strong>Có <code>log_every</code> và <code>save_every</code></strong>; ghi rõ đơn vị (update hay bước env) trong comment của trường.</li>
 <li><strong>Dọn dẹp</strong>: bắt <code>KeyboardInterrupt</code>, <code>envs.close()</code> trong <code>finally</code>, và lưu <code>state_dict</code> vào <code>save_path</code> khi kết thúc.</li>
 <li><strong>Mạng phải nhận</strong> <code>uint8</code> hình <code>(B, 4, 84, 84)</code> và tự chia 255 (như hai mạng sẵn có).</li>
@@ -97,6 +97,7 @@ class A2CConfig:
     log_every: int = 500          # in log mỗi bao nhiêu update
     save_every: int = 5000        # lưu checkpoint mỗi bao nhiêu update (khi có save_path)
     reward_fn: Callable = log_reward   # reward thật (mảng n_envs) -&gt; reward dùng để học
+    death_penalty: float = 0.0         # trừ điểm khi mất mạng
 
 
 def train_a2c(cfg=None, *, model=None, save_path=None, device=None, render=False,
@@ -120,7 +121,7 @@ def train_a2c(cfg=None, *, model=None, save_path=None, device=None, render=False
     B_done = torch.zeros((n_steps, n_envs), device=device)
 
     ep_log = []
-    log = {"step": [], "ent": [], "v_loss": [], "pg_loss": [], "pellets": [], "ghosts": []}
+    log = {"step": [], "ent": [], "v_loss": [], "pg_loss": [], "pellets": [], "ghosts": [], "deaths": []}
     global_step, t0, n_pellet, n_ghost = 0, time.time(), 0, 0
     print(f"A2C: {n_updates} updates x {batch} mẫu = {n_updates * batch:,} bước, {n_envs} env song song")
 
@@ -138,11 +139,12 @@ def train_a2c(cfg=None, *, model=None, save_path=None, device=None, render=False
             for t in range(n_steps):
                 for g in range(envs.G):
                     sl = envs.slices[g]
-                    next_obs, reward, done, scores = envs.recv(g)
+                    next_obs, reward, done, scores, died = envs.recv(g)
+                    r = cfg.reward_fn(reward) - cfg.death_penalty * died
                     global_step += envs.gs
                     ep_log.extend((global_step, s) for s in scores)
                     p, gh = count_events(reward); n_pellet += p; n_ghost += gh
-                    B_rew[t, sl] = torch.as_tensor(cfg.reward_fn(reward), device=device)
+                    B_rew[t, sl] = torch.as_tensor(r, device=device)
                     B_done[t, sl] = torch.as_tensor(done, dtype=torch.float32, device=device)
                     obs[sl] = torch.as_tensor(next_obs, device=device)
                     if t + 1 &lt; n_steps:

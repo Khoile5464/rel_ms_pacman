@@ -35,16 +35,19 @@ plot_metric(runs, "q_mean")        # một chỉ số bất kỳ trong log; run 
 </div>
 <p><code>runs</code> là dict <em>nhãn → TrainResult</em>. Một run hay nhiều run, PPO hay DQN đều cùng cách. Danh sách hàm vẽ: <a href="../reference/api.html#plotting">API plotting</a>. Mỗi hàm <code>plot_*</code> nhỏ nhận <code>ax=</code> để ghép vào figure của bạn.</p>
 
-<h2 id="default">Ba biểu đồ mặc định</h2>
+<h2 id="default">Sáu biểu đồ mặc định</h2>
 <figure>
-<img src="../assets/img/quickstart-curves.png" alt="Ba biểu đồ mặc định của plot_training" style="width:100%;border:1px solid var(--border);border-radius:14px">
-<figcaption>Ảnh thật từ một run PPO 50,000 bước. Run này quá ngắn nên biểu đồ phải trống ý nghĩa; ba biểu đồ có đầy đủ nội dung khi run dài hơn.</figcaption>
+<img src="../assets/img/quickstart-curves.png" alt="Biểu đồ mặc định của plot_training (ảnh chụp bản cũ, 3 biểu đồ)" style="width:100%;border:1px solid var(--border);border-radius:14px">
+<figcaption>Ảnh thật từ một run PPO 50,000 bước. Run này quá ngắn nên biểu đồ phải trống ý nghĩa; các biểu đồ có đầy đủ nội dung khi run dài hơn. Ảnh chụp từ bản cũ chỉ có ba biểu đồ đầu; bản hiện tại là lưới 2x3 với sáu biểu đồ như bảng dưới.</figcaption>
 </figure>
 <div class="table-wrap"><table>
 <thead><tr><th>Biểu đồ</th><th>Hiển thị</th><th>Đọc thế nào</th></tr></thead>
 <tbody>
 <tr><td><strong>Điểm theo số bước</strong></td><td>Chấm mờ: điểm từng ván. Đường: trung bình trượt 20 ván.</td><td>Đường đi lên là agent đang học. Chấm mờ rải rộng là bình thường: điểm mỗi ván dao động lớn.</td></tr>
 <tr><td><strong>Entropy (PPO)</strong></td><td>Độ ngẫu nhiên của policy.</td><td>Xem <a href="#read-ppo">Đọc log PPO</a>. DQN không có chỉ số này nên không xuất hiện.</td></tr>
+<tr><td><strong>Bước sống mỗi lượt</strong></td><td>Số bước env trung bình mỗi lượt chơi (một mạng), theo từng khoảng <code>bin_size</code> bước (mặc định 100,000).</td><td>Đường đi lên là agent sống lâu hơn trước mỗi lần chết. Cùng số liệu với cột <code>bước/lượt</code> trong log của <code>train_ppo</code>. Bin không ai chết bị bỏ trống.</td></tr>
+<tr><td><strong>Viên năng lượng mỗi lượt</strong></td><td>Số viên năng lượng ăn được trung bình mỗi lượt, cũng theo bin.</td><td>Phân biệt sống lâu hơn do ăn nhiều hơn hay chỉ né giỏi hơn (đứng yên né ma).</td></tr>
+<tr><td><strong>Ma ăn mỗi lượt</strong></td><td>Số ma ăn được trung bình mỗi lượt, theo bin.</td><td>Chỉ tăng khi agent học được cách ăn viên năng lượng rồi đuổi ma.</td></tr>
 <tr><td><strong>Ma ăn trên viên năng lượng</strong></td><td>Tỷ lệ số ma / số viên năng lượng ăn được, theo từng khoảng 100,000 bước.</td><td>Đo xem agent có biết "ăn viên năng lượng rồi đuổi ma" không. Chỉ có ý nghĩa với run từ vài trăm nghìn bước trở lên.</td></tr>
 </tbody></table></div>
 
@@ -78,7 +81,7 @@ plot_metric(runs, "q_mean")        # một chỉ số bất kỳ trong log; run 
 <p><code>loss</code> và <code>q_mean</code> là <code>nan</code> ở các điểm log đầu tiên, trước <code>learning_starts</code>, vì chưa học lần nào; không phải lỗi.</p>
 
 <h2 id="read-events">Đọc chỉ số ăn viên năng lượng và ma</h2>
-<p><code>pellets</code> và <code>ghosts</code> trong log là tổng <em>tích lũy</em> từ đầu run. <code>plot_events</code> đổi thành số lượng trong mỗi khoảng <code>bin_size</code> bước để dễ thấy xu hướng:</p>
+<p><code>pellets</code>, <code>ghosts</code> và <code>deaths</code> (tổng số mạng đã mất) trong log là tổng <em>tích lũy</em> từ đầu run. <code>plot_training</code> đã dùng <code>deaths</code> cho ba biểu đồ theo lượt; <code>plot_events</code> vẫn chỉ vẽ <code>pellets</code> và <code>ghosts</code>. <code>plot_events</code> đổi thành số lượng trong mỗi khoảng <code>bin_size</code> bước để dễ thấy xu hướng:</p>
 <ul>
 <li><strong>Viên năng lượng / khoảng</strong> tăng: agent tìm tới các viên năng lượng thường xuyên hơn.</li>
 <li><strong>Ma / khoảng</strong> tăng: agent biết ăn ma khi ma sợ hãi.</li>

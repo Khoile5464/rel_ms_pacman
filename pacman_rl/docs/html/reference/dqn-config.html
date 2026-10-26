@@ -43,6 +43,7 @@ cfg = DQNConfig(total_steps=10_000_000, buffer_size=200_000, lr=1e-4)
 <tr><td><a href="#log_every"><code>log_every</code></a></td><td class="num">100,000</td><td>bước env</td><td>Ghi/in log</td></tr>
 <tr><td><a href="#save_every"><code>save_every</code></a></td><td class="num">500,000</td><td>bước env</td><td>Lưu checkpoint</td></tr>
 <tr><td><a href="#reward_fn"><code>reward_fn</code></a></td><td><code>log_reward</code></td><td>-</td><td>Biến đổi reward</td></tr>
+<tr><td><a href="#death_penalty"><code>death_penalty</code></a></td><td class="num">0.0</td><td>-</td><td>Trừ điểm reward học khi mất mạng</td></tr>
 </tbody></table></div>
 
 <h2 id="derived">Đại lượng dẫn xuất</h2>
@@ -222,6 +223,15 @@ cfg = DQNConfig(total_steps=10_000_000, buffer_size=200_000, lr=1e-4)
 <section class="param">
 <h3 id="reward_fn"><code>reward_fn</code> <span class="type">Callable</span> <span class="default">mặc định log_reward</span></h3>
 <p>Hàm nhận mảng reward thật của một nhóm env và trả về reward học, giống PPO. Không đặt được từ CLI. Xem <a href="../guides/reward-shaping.html">Reward shaping</a>.</p>
+</section>
+
+<section class="param">
+<h3 id="death_penalty"><code>death_penalty</code> <span class="type">float</span> <span class="default">mặc định 0.0</span></h3>
+<p>Số điểm trừ khỏi <strong>reward học</strong> ở bước agent vừa mất một mạng: <code>reward_học = reward_fn(reward) - death_penalty * died</code>. Mặc định 0 là không phạt.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Chỉ reward học (cùng thang với <code>reward_fn</code>: chấm nhỏ ≈ 0.69, viên năng lượng ≈ 1.79). Điểm báo cáo, số viên năng lượng và số ma vẫn tính từ reward thật.</dd>
+<dt>Khi nào chỉnh</dt><dd>Khi agent hay lao vào ma. Giá trị thử: 1 đến 3. Phạt quá lớn khiến agent né ma quá mức và đứng yên.</dd>
+</dl>
 </section>
 
 <h2 id="fixed">Những thứ cố định, không phải tham số</h2>
