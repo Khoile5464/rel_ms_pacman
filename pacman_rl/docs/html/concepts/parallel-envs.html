@@ -102,7 +102,7 @@ for g in range(envs.G):                               # khởi động cả hai 
     launch(0, g)
 for t in range(n_steps):
     for g in range(envs.G):
-        next_obs, reward, done, scores = envs.recv(g) # step_wait: chờ nhóm g xong bước vừa rồi
+        next_obs, reward, done, scores, died = envs.recv(g) # step_wait: chờ nhóm g xong bước vừa rồi
         ...                                           # ghi reward, done, obs mới
         if t + 1 &lt; n_steps:
             launch(t + 1, g)                          # chọn action tiếp, gửi đi rồi quay sang nhóm kia

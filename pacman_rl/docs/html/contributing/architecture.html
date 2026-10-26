@@ -25,7 +25,7 @@
 │   ├── envs/              tạo env, wrapper, env song song, reward   (KHÔNG import torch)
 │   │   ├── factory.py       make_env, ENV_ID, N_ACTIONS, OBS_SHAPE
 │   │   ├── wrappers.py      EpisodicLife
-│   │   ├── vector.py        PipelinedEnvs, pop_game_scores
+│   │   ├── vector.py        PipelinedEnvs, pop_game_scores, pop_deaths
 │   │   └── rewards.py       log_reward, count_events
 │   ├── models/
 │   │   └── networks.py      make_cnn, ActorCriticCNN, QNetwork
@@ -61,7 +61,7 @@
 <tbody>
 <tr><td><code>envs/factory.py</code></td><td>Tạo một env đã tiền xử lý</td><td><code>make_env</code>, <code>ENV_ID</code>, <code>N_ACTIONS</code>, <code>OBS_SHAPE</code></td></tr>
 <tr><td><code>envs/wrappers.py</code></td><td>Đổi tín hiệu kết thúc khi học</td><td><code>EpisodicLife</code></td></tr>
-<tr><td><code>envs/vector.py</code></td><td>Chạy nhiều env song song, xen kẽ với GPU</td><td><code>PipelinedEnvs</code>, <code>pop_game_scores</code></td></tr>
+<tr><td><code>envs/vector.py</code></td><td>Chạy nhiều env song song, xen kẽ với GPU</td><td><code>PipelinedEnvs</code>, <code>pop_game_scores</code>, <code>pop_deaths</code></td></tr>
 <tr><td><code>envs/rewards.py</code></td><td>Biến đổi reward, đếm sự kiện</td><td><code>log_reward</code>, <code>count_events</code></td></tr>
 <tr><td><code>models/networks.py</code></td><td>Mạng neural</td><td><code>make_cnn</code>, <code>ActorCriticCNN</code>, <code>QNetwork</code></td></tr>
 <tr><td><code>agents/ppo.py</code>, <code>dqn.py</code></td><td>Vòng lặp train</td><td><code>PPOConfig</code>/<code>train_ppo</code>, <code>DQNConfig</code>/<code>train_dqn</code></td></tr>
@@ -78,16 +78,19 @@
  ┌───────────────────────────────────────────────────────┐
  │ gym.make(ALE/MsPacman-v5)                             │
  │   → AtariPreprocessing (skip 4, xám, 84x84, noop 30)  │
- │   → EpisodicLife (mất mạng = done, ghi game_score)    │
+ │   → EpisodicLife (mất mạng = done, ghi game_score,        │
+ │                    life_lost)                          │
  │   → FrameStack(4)            → obs uint8 (4,84,84)    │
  └───────────────┬───────────────────────▲───────────────┘
-   obs, reward thật, done, game_score    │ action
+   obs, reward thật, done, game_score, died │ action
                  ▼                       │
  PipelinedEnvs.recv(g)            PipelinedEnvs.send(g)
                  │                       ▲
                  ├─ count_events(reward thật) → log["pellets"], log["ghosts"]
+                 ├─ died                     → log["deaths"]
                  ├─ game_score               → episodes [(bước, điểm thật)]
-                 └─ cfg.reward_fn(reward)    → reward dùng để học
+                 └─ cfg.reward_fn(reward) - cfg.death_penalty * died
+                                             → reward dùng để học
                                   │
      PPO: B_rew → GAE → clipped loss       DQN: replay buffer → Bellman / Huber
                                   │

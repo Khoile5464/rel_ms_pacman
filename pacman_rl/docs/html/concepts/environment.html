@@ -61,6 +61,7 @@
 <li>Khi số mạng giảm mà game chưa hết, báo <code>terminated=True</code>. Thuật toán coi đó là kết thúc episode: PPO cắt giá trị tương lai (<code>nonterm = 0</code>), DQN không bootstrap (<code>1 - done = 0</code>).</li>
 <li>Khi vector env tự reset sau <code>done</code>, wrapper <em>không</em> reset game thật nếu game chưa hết. Nó chỉ bước thêm 1 action NOOP để đi tiếp từ chỗ hồi sinh.</li>
 <li>Game thật chỉ reset khi hết cả 3 mạng. Lúc đó wrapper ghi điểm cả ván vào <code>info["game_score"]</code>.</li>
+<li>Mỗi bước mất mạng, wrapper ghi <code>info["life_lost"] = True</code>. <code>PipelinedEnvs.recv</code> gom cờ này thành mảng <code>died</code> để trainer trừ <code>death_penalty</code> khỏi reward học.</li>
 </ul>
 <div class="callout warn">
 <p class="callout-title">Chỉ dùng khi học</p>
@@ -73,10 +74,10 @@
 <thead><tr><th>Loại</th><th>Giá trị ví dụ</th><th>Lấy ở đâu</th><th>Dùng để</th></tr></thead>
 <tbody>
 <tr><td><strong>Reward thật</strong></td><td>0, 10, 50, 200 ...</td><td><code>reward</code> trả về từ <code>PipelinedEnvs.recv</code></td><td>Đếm sự kiện (<code>count_events</code>). Không dùng để học.</td></tr>
-<tr><td><strong>Reward học</strong></td><td>0, 0.69, 1.79, 3.04 ...</td><td><code>cfg.reward_fn(reward)</code> (mặc định <code>log_reward</code>)</td><td>Tính gradient. Đây là thứ agent thực sự "nhìn thấy".</td></tr>
+<tr><td><strong>Reward học</strong></td><td>0, 0.69, 1.79, 3.04 ...</td><td><code>cfg.reward_fn(reward) - cfg.death_penalty * died</code> (mặc định <code>log_reward</code>, <code>death_penalty = 0</code>)</td><td>Tính gradient. Đây là thứ agent thực sự "nhìn thấy".</td></tr>
 <tr><td><strong>Điểm cả ván</strong></td><td>vài trăm đến vài nghìn</td><td><code>info["game_score"]</code> → danh sách <code>episodes</code></td><td>Đường học, <code>avg score(20)</code>, so sánh các phương pháp.</td></tr>
 </tbody></table></div>
-<p>Thay <code>reward_fn</code> (reward shaping) chỉ đổi loại thứ hai. Hai loại còn lại luôn tính từ điểm thật nên biểu đồ vẫn so sánh được giữa các cấu hình reward khác nhau.</p>
+<p>Thay <code>reward_fn</code> hoặc đặt <code>death_penalty</code> (reward shaping) chỉ đổi loại thứ hai. Hai loại còn lại luôn tính từ điểm thật nên biểu đồ vẫn so sánh được giữa các cấu hình reward khác nhau.</p>
 
 <h3 id="log-reward">Vì sao reward học là <code>log1p(r / 10)</code></h3>
 <p>Điểm thật nhảy từ 10 (chấm nhỏ) tới 1600 (ma thứ tư), chênh nhau 160 lần. Gradient tỉ lệ với reward nên các sự kiện lớn sẽ lấn át mọi thứ. Hàm <code>log_reward</code> nén thang đó mà vẫn giữ thứ tự: sự kiện nào đáng giá hơn thì reward lớn hơn.</p>

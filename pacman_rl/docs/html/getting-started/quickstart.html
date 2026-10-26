@@ -47,14 +47,21 @@ Update 24/24 | step 49,152 | avg score(20) 510 | viên NL 45 | ma 22 | entropy 1
 Đã lưu: ...\runs\quick.pt
 Đã lưu: ...\runs\quick_episodes.npy
 Đã lưu: ...\runs\quick_log.npy</code></pre>
-<p>Cả lần chạy mất khoảng 25 giây trên máy đó; máy bạn sẽ khác. Cách đọc từng cột:</p>
+<p>Cả lần chạy mất khoảng 25 giây trên máy đó; máy bạn sẽ khác.</p>
+<div class="callout warn">
+<p class="callout-title">Log mẫu ở trên là định dạng cũ</p>
+<p>Log mẫu ghi từ phiên bản trước: hai cột <code>viên NL</code> và <code>ma</code> là tổng tích luỹ từ đầu lần train. Bản hiện tại của <code>train_ppo</code> thay chúng bằng số liệu riêng của từng khoảng log (<code>N lượt | bước/lượt | viên NL/lượt | ma/lượt</code>) như bảng dưới. <code>train_dqn</code> chưa đổi và vẫn in <code>viên NL</code>, <code>ma</code> tích luỹ.</p>
+</div>
+<p>Cách đọc từng cột (theo định dạng mới của PPO):</p>
 <div class="table-wrap"><table>
 <thead><tr><th>Cột</th><th>Ý nghĩa</th></tr></thead>
 <tbody>
 <tr><td><code>Update 10/24</code></td><td>Đã xong update thứ 10 trên tổng 24. Mỗi update = thu một rollout rồi cập nhật mạng.</td></tr>
 <tr><td><code>step 20,480</code></td><td>Số bước env đã chạy (cộng dồn cả 16 env).</td></tr>
 <tr><td><code>avg score(20)</code></td><td>Điểm thật trung bình của 20 ván (3 mạng) vừa kết thúc gần nhất. In <code>nan</code> khi chưa có ván nào kết thúc.</td></tr>
-<tr><td><code>viên NL</code>, <code>ma</code></td><td>Tổng số viên năng lượng (50 điểm) và ma (200 đến 1600 điểm) đã ăn từ đầu lần train.</td></tr>
+<tr><td><code>N lượt</code></td><td>Số lượt chơi (một lượt = một mạng, kết thúc khi mất mạng) đã kết thúc <strong>trong khoảng từ dòng log trước</strong>, tức bằng số lần chết trong khoảng đó. Không cộng dồn.</td></tr>
+<tr><td><code>bước/lượt</code></td><td>Số bước env trung bình mỗi lượt trong khoảng đó. Tăng nghĩa là agent sống lâu hơn. Mỗi bước bằng 4 frame game.</td></tr>
+<tr><td><code>viên NL/lượt</code>, <code>ma/lượt</code></td><td>Số viên năng lượng (50 điểm) và ma (200 đến 1600 điểm) ăn được trung bình mỗi lượt, cũng chỉ trong khoảng đó. Dùng để biết sống lâu hơn là do ăn nhiều hơn hay chỉ né giỏi hơn.</td></tr>
 <tr><td><code>entropy</code></td><td>Độ ngẫu nhiên của policy. Khởi đầu khoảng 2.197 (= ln 9, đều trên 9 action) và giảm dần khi agent bắt đầu chắc chắn hơn.</td></tr>
 <tr><td><code>KL</code>, <code>clipfrac</code></td><td>Policy mới lệch bao xa so với policy lúc thu dữ liệu. Xem <a href="../guides/plotting.html#read-ppo">đọc log PPO</a>.</td></tr>
 <tr><td><code>steps/s</code></td><td>Tốc độ thu dữ liệu tính từ lúc bắt đầu.</td></tr>

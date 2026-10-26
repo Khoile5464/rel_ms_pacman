@@ -22,7 +22,7 @@ save_run(dqn, ".", "ms_pacman_dqn")
 - Muốn xem trong lúc train: `render=True` (env số 0 mở cửa sổ, chạy tuần tự nên chậm) hoặc `watch_every=500_000` (cứ 500k bước mở 1 ván).
 - Bấm Stop (Ctrl+C) giữa chừng: hàm vẫn lưu `.pt` và trả về phần đã train.
 - Train tiếp từ model có sẵn: `train_ppo(cfg, model=result.model)`. Lưu ý optimizer và lịch lr bắt đầu lại.
-- `save_run(result, dir, name, append=True)`: nếu run `name` đã tồn tại thì episodes / log được **nối vào sau** run cũ (bước env cộng offset để đường cong liền mạch, `pellets` / `ghosts` cộng tiếp), `.pt` ghi đè bằng model mới; chưa tồn tại thì tạo mới. `append=False` để ghi đè hoàn toàn. Đừng gọi hai lần với cùng một `result`, sẽ bị nối trùng.
+- `save_run(result, dir, name, append=True)`: nếu run `name` đã tồn tại thì episodes / log được **nối vào sau** run cũ (bước env cộng offset để đường cong liền mạch, `pellets` / `ghosts` / `deaths` cộng tiếp; run cũ chưa có `deaths` thì đệm NaN), `.pt` ghi đè bằng model mới; chưa tồn tại thì tạo mới. `append=False` để ghi đè hoàn toàn. Đừng gọi hai lần với cùng một `result`, sẽ bị nối trùng.
 
 Đổi siêu tham số:
 
@@ -133,5 +133,6 @@ Thêm `-h` sau mỗi lệnh để xem đủ tùy chọn. Lệnh `pacman-rl` (cà
 |---|---|---|
 | `step` | bước env sau mỗi update | bước env mỗi `log_every` |
 | `pellets`, `ghosts` | tổng tích luỹ viên năng lượng / ma đã ăn | như PPO |
+| `deaths` | tổng tích luỹ số mạng đã mất | như PPO |
 | `ent`, `kl`, `clipfrac`, `v_loss`, `pg_loss` | của minibatch cuối mỗi update | |
 | `loss`, `q_mean`, `eps` | | trung bình từ lần log trước |

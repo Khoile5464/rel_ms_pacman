@@ -77,7 +77,7 @@ class PPOConfig:
 </ul>
 <div class="callout warn">
 <p class="callout-title">Sửa <code>PipelinedEnvs.recv</code> chạm tới cả hai trainer</p>
-<p><code>recv</code> trả về bộ bốn <code>(obs, reward, done, scores)</code> và cả <code>train_ppo</code> lẫn <code>train_dqn</code> cùng unpack bốn giá trị này. Đổi chữ ký là phải sửa cả hai (và mọi thuật toán bạn đã thêm).</p>
+<p><code>recv</code> trả về bộ năm <code>(obs, reward, done, scores, died)</code> và cả <code>train_ppo</code> lẫn <code>train_dqn</code> cùng unpack năm giá trị này. Đổi chữ ký là phải sửa cả hai (và mọi thuật toán bạn đã thêm).</p>
 </div>
 
 <h2 id="add-network">Thêm một mạng</h2>

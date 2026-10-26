@@ -4,6 +4,12 @@
 
 `PPOConfig.reward_fn` / `DQNConfig.reward_fn` nhận **mảng reward thật** của một nhóm env (độ dài `n_envs / 2`) và trả về reward dùng để học. Điểm báo cáo, số viên năng lượng và số ma vẫn tính từ reward thật, không bị ảnh hưởng.
 
+**Phạt mất mạng** không cần viết hàm: đặt `death_penalty` trong config (mặc định `0.0`). Trainer trừ `death_penalty` khỏi reward học ở bước agent vừa mất một mạng (`EpisodicLife` ghi `info["life_lost"]`, `PipelinedEnvs.recv` trả về cờ `died`). Chỉ tác động lên reward học, không đổi điểm báo cáo.
+
+```python
+cfg = PPOConfig(death_penalty=2.5)
+```
+
 Ví dụ phạt nhỏ mỗi bước (mục 1 trong `notebooks/TODO_ms_pacman.md`):
 
 ```python

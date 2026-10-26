@@ -99,18 +99,20 @@ from pacman_rl.plotting import plot_training, plot_scores, plot_metric, plot_eve
 <pre class="plain"><code>PipelinedEnvs(n_envs, n_groups=2, render=False)
   .reset(seed=0)        -&gt; obs (n_envs,4,84,84)
   .send(g, actions)     # gửi action cho nhóm g, trả về ngay (step_async)
-  .recv(g)              -&gt; (obs, reward_thật, done, danh_sách_điểm_ván_vừa_kết_thúc)
+  .recv(g)              -&gt; (obs, reward_thật, done, danh_sách_điểm_ván_vừa_kết_thúc, died)
+                        # died: float32 (gs,), 1.0 ở env vừa mất một mạng
   .close()
   # thuộc tính: G (số nhóm), gs (env mỗi nhóm), n (tổng env), slices, n_actions, envs</code></pre>
 <p>Vector env cho việc học, chia thành <code>n_groups</code> nhóm để chạy xen kẽ với GPU. <code>n_envs</code> phải chia hết cho <code>n_groups</code>. Hai trình train hiện luôn dùng 2 nhóm. Xem <a href="../concepts/parallel-envs.html">Env song song và pipeline</a>.</p>
 
 <h3 id="EpisodicLife"><code>EpisodicLife</code></h3>
-<p><code>gym.Wrapper</code>: mất mạng thì báo <code>terminated=True</code>; chỉ reset game thật khi hết mạng; ghi <code>info["game_score"]</code> khi hết cả ván.</p>
+<p><code>gym.Wrapper</code>: mất mạng thì báo <code>terminated=True</code>; chỉ reset game thật khi hết mạng; ghi <code>info["life_lost"]</code> (<code>True</code> ở bước vừa mất mạng) và <code>info["game_score"]</code> khi hết cả ván.</p>
 
-<h3 id="reward-helpers"><code>log_reward</code>, <code>count_events</code>, <code>pop_game_scores</code></h3>
+<h3 id="reward-helpers"><code>log_reward</code>, <code>count_events</code>, <code>pop_game_scores</code>, <code>pop_deaths</code></h3>
 <pre class="plain"><code>log_reward(r) -&gt; np.ndarray             # log1p(r / 10), float32
 count_events(reward) -&gt; (n_pellet, n_ghost)
-pop_game_scores(infos) -&gt; list[float]    # điểm các ván vừa kết thúc hẳn, từ info của vector env</code></pre>
+pop_game_scores(infos) -&gt; list[float]    # điểm các ván vừa kết thúc hẳn, từ info của vector env
+pop_deaths(infos, n) -&gt; np.ndarray      # float32 (n,), 1.0 ở env vừa mất mạng (info["life_lost"])</code></pre>
 <p>Hằng số: <code>ENV_ID</code>, <code>N_ACTIONS</code> (9), <code>OBS_SHAPE</code> ((4,84,84)), <code>PELLET_REWARD</code> (50), <code>GHOST_REWARDS</code> ((200,400,800,1600)). Ý nghĩa ở <a href="../concepts/environment.html">Môi trường và các loại điểm</a>.</p>
 
 <h2 id="evaluation">pacman_rl.evaluation</h2>
@@ -142,18 +144,20 @@ random_baseline(n_episodes=5, n_actions=9)                  -&gt; list[float]</c
 load_run(directory, name, algo, device="cpu") -&gt; TrainResult
 load_model(path, algo, device="cpu", n_actions=N_ACTIONS) -&gt; nn.Module  # chế độ eval
 run_paths(directory, name)                   -&gt; (path_model, path_episodes, path_log)</code></pre>
-<p><code>save_run</code> với <code>append=True</code> (mặc định): nếu run <code>name</code> đã có trong <code>directory</code> thì episodes và log của lần train này được <strong>nối vào sau</strong> kết quả cũ, bước env tiếp nối từ bước cuối của lần cũ (các chỉ số tích luỹ <code>pellets</code>, <code>ghosts</code> cũng cộng tiếp); model <code>.pt</code> luôn được ghi đè bằng bản mới nhất. Chưa có run cùng tên thì tạo mới. <code>append=False</code> ghi đè hoàn toàn. Đừng gọi <code>save_run</code> hai lần với cùng một <code>result</code>, sẽ bị nối trùng.</p>
+<p><code>save_run</code> với <code>append=True</code> (mặc định): nếu run <code>name</code> đã có trong <code>directory</code> thì episodes và log của lần train này được <strong>nối vào sau</strong> kết quả cũ, bước env tiếp nối từ bước cuối của lần cũ (các chỉ số tích luỹ <code>pellets</code>, <code>ghosts</code>, <code>deaths</code> cũng cộng tiếp; run cũ chưa có <code>deaths</code> thì đệm NaN); model <code>.pt</code> luôn được ghi đè bằng bản mới nhất. Chưa có run cùng tên thì tạo mới. <code>append=False</code> ghi đè hoàn toàn. Đừng gọi <code>save_run</code> hai lần với cùng một <code>result</code>, sẽ bị nối trùng.</p>
 <p><code>algo</code> là <code>"ppo"</code> hoặc <code>"dqn"</code>. <code>load_run</code> chấp nhận thiếu file log/episodes (trả về rỗng, chỉ còn model). Định dạng file ở <a href="files-and-logs.html#files">File lưu và log</a>.</p>
 
 <h2 id="plotting">pacman_rl.plotting</h2>
 <p>Mọi hàm nhận <code>runs</code>: dict <em>tên → TrainResult</em> (hoặc tuple <code>(model, log, episodes)</code>), nên vẽ một hay nhiều run đều cùng một cách. Nhiều hàm nhận <code>ax=</code> / <code>axes=</code> để ghép vào figure của bạn.</p>
-<pre class="plain"><code>plot_training(runs, random_scores=None, save_path=None, show=True) -&gt; Figure   # 3 biểu đồ tổng hợp
+<pre class="plain"><code>plot_training(runs, random_scores=None, save_path=None, show=True, bin_size=100_000) -&gt; Figure   # 6 biểu đồ tổng hợp (lưới 2x3)
 plot_scores(runs, random_scores=None, w=20, ax=None)     # điểm từng ván + trung bình trượt w ván
 plot_metric(runs, key, title=None, ax=None)              # một chỉ số bất kỳ trong log
 plot_events(runs, total=None, bin_size=100_000, axes=None)   # viên năng lượng / ma / tỷ lệ
 plot_eval(results, save_path=None, show=True) -&gt; Figure   # boxplot điểm đánh giá; in bảng mean/std/max
 score_curve(episodes, w=20) -&gt; (steps, avg)               # dữ liệu cho đường trung bình trượt
-events_per_bin(log, total=None, bin_size=100_000)        # sự kiện trong mỗi khoảng bin_size bước</code></pre>
+events_per_bin(log, total=None, bin_size=100_000)        # sự kiện (pellets, ghosts, deaths nếu có) và số bước thật trong mỗi bin
+per_life(ev, key)                                        # key ("steps"/"pellets"/"ghosts") trung bình mỗi lượt chơi trong từng bin</code></pre>
+<p>Một <strong>lượt chơi</strong> là một mạng (kết thúc khi chết), nên số lượt trong một bin bằng số lần chết <code>log["deaths"]</code> trong bin đó. <code>per_life</code> trả NaN ở bin không ai chết. Run lưu từ bản cũ không có <code>deaths</code> thì <code>plot_training</code> bỏ qua các biểu đồ theo lượt.</p>
 
 <h2 id="utils">pacman_rl.utils</h2>
 <pre class="plain"><code>get_device(prefer_cuda=True) -&gt; torch.device    # cuda nếu có; bật TF32 và cuDNN benchmark
