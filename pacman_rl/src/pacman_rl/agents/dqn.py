@@ -36,6 +36,7 @@ class DQNConfig:
     log_every: int = 100_000      # bước env
     save_every: int = 500_000     # bước env
     reward_fn: Callable = log_reward   # reward thật (mảng n_envs) -> reward dùng để học
+    death_penalty: float = 0.0         # trừ điểm khi mất mạng (mất mạng = done)
 
 
 def train_dqn(cfg=None, *, model=None, save_path=None, device=None, render=False,
@@ -57,8 +58,9 @@ def train_dqn(cfg=None, *, model=None, save_path=None, device=None, render=False
     ep_log, first = [], np.ones(n_envs, dtype=bool)                # first[e]: obs hiện tại của env e là frame đầu episode
     pend = [None] * envs.G                                         # (obs, action, is_first) đã gửi đi, chờ kết quả
     trans = [None] * envs.G                                        # chuyển tiếp đã hoàn tất của vòng này
-    log = {"step": [], "loss": [], "q_mean": [], "eps": [], "pellets": [], "ghosts": []}
-    n_pellet = n_ghost = 0                                         # tổng số viên năng lượng / ma đã ăn
+    log = {"step": [], "loss": [], "q_mean": [], "eps": [], "pellets": [], "ghosts": [], "deaths": []}
+    n_pellet = n_ghost = n_death = 0                               # tổng số viên năng lượng / ma đã ăn / mạng đã mất
+    last_log_step, last_log_death = 0, 0                           # mốc của lần in trước, để tính số bước mỗi mạng trong cửa sổ gần nhất
     loss_acc, q_acc, n_acc = torch.zeros((), device=device), torch.zeros((), device=device), 0   # cộng dồn trên GPU, đỡ sync
     t0 = time.time()
     n_iters = cfg.total_steps // n_envs
@@ -84,11 +86,13 @@ def train_dqn(cfg=None, *, model=None, save_path=None, device=None, render=False
             eps = max(cfg.eps_end, cfg.eps_start - (cfg.eps_start - cfg.eps_end) * step / max(eps_steps, 1))
             for g in range(envs.G):                            # nhận kết quả nhóm g rồi gửi ngay action kế tiếp
                 sl = envs.slices[g]
-                next_obs, reward, done, scores = envs.recv(g)
+                next_obs, reward, done, scores, died = envs.recv(g)
+                r = cfg.reward_fn(reward) - cfg.death_penalty * died
                 ep_log.extend((step, s) for s in scores)       # điểm thật của ván vừa hết 3 mạng
                 p, gh = count_events(reward); n_pellet += p; n_ghost += gh
+                n_death += int(died.sum())
                 p_obs, p_act, p_first = pend[g]
-                trans[g] = (p_obs, p_act, cfg.reward_fn(reward), done.astype(np.float32), p_first)
+                trans[g] = (p_obs, p_act, r, done.astype(np.float32), p_first)
                 obs[sl], first[sl] = next_obs, done
                 launch(g, eps)
             buffer.add(*[np.concatenate(x) for x in zip(*trans)])  # ghi cả n_envs env của bước này cùng lúc
@@ -120,12 +124,15 @@ def train_dqn(cfg=None, *, model=None, save_path=None, device=None, render=False
             if step >= next_log:
                 next_log += cfg.log_every
                 recent = [r for _, r in ep_log[-20:]]
-                log["step"].append(step); log["eps"].append(eps); log["pellets"].append(n_pellet); log["ghosts"].append(n_ghost)
+                log["step"].append(step); log["eps"].append(eps); log["pellets"].append(n_pellet); log["ghosts"].append(n_ghost); log["deaths"].append(n_death)
+                d_death = n_death - last_log_death
+                steps_per_life = (step - last_log_step) / d_death if d_death else float("inf")
+                last_log_step, last_log_death = step, n_death
                 log["loss"].append(loss_acc.item() / n_acc if n_acc else float("nan"))
                 log["q_mean"].append(q_acc.item() / n_acc if n_acc else float("nan"))
                 loss_acc.zero_(); q_acc.zero_(); n_acc = 0
                 print(f"Step {step:,}/{cfg.total_steps:,} | avg score(20) {np.mean(recent) if recent else float('nan'):.0f} | "
-                      f"viên NL {n_pellet:,} | ma {n_ghost:,} | eps {eps:.2f} | loss {log['loss'][-1]:.4f} | "
+                      f"viên NL {n_pellet:,} | ma {n_ghost:,} | chết {n_death:,} ({steps_per_life:.0f} bước/mạng) | eps {eps:.2f} | loss {log['loss'][-1]:.4f} | "
                       f"Q {log['q_mean'][-1]:.2f} | {step / (time.time() - t0):.0f} steps/s")
 
         for g in range(envs.G):                                # nhận nốt các bước đang chạy dở trước khi đóng env

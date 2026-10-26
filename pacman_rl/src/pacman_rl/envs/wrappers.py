@@ -15,9 +15,11 @@ class EpisodicLife(gym.Wrapper):
         self.score += r
         self.real_done = term or trunc
         lives = self.env.unwrapped.ale.lives()
+        died = lives < self.lives
         if 0 < lives < self.lives:
             term = True                                    # mất mạng nhưng game chưa hết
         self.lives = lives
+        info["life_lost"] = died
         if self.real_done:
             info["game_score"] = self.score
         return obs, r, term, trunc, info
