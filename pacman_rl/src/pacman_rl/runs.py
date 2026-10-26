@@ -29,10 +29,13 @@ def _merge(old_log, old_eps, log, episodes):
     merged = {}
     for k in set(old_log) | set(log):
         a, b = list(old_log.get(k, [])), list(log.get(k, []))
+        if k == "deaths" and not a:                       # run cũ chưa ghi số lần chết: đệm NaN cho khớp độ dài với step
+            a = [float("nan")] * len(old_steps)
         if k == "step":
             b = [x + offset for x in b]
-        elif k in ("pellets", "ghosts") and a:
-            b = [x + a[-1] for x in b]
+        elif k in ("pellets", "ghosts", "deaths") and a:
+            base = a[-1] if a[-1] == a[-1] else 0         # NaN (run cũ không có) thì cộng tiếp từ 0
+            b = [x + base for x in b]
         merged[k] = a + b
     eps = np.array(episodes, dtype=float).reshape(-1, 2)
     eps[:, 0] += offset
