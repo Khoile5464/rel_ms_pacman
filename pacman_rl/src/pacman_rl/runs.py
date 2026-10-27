@@ -77,3 +77,16 @@ def load_run(directory, name, algo, device="cpu"):
     episodes = [tuple(x) for x in np.load(p_eps)] if p_eps.exists() else []
     log = np.load(p_log, allow_pickle=True).item() if p_log.exists() else {}
     return TrainResult(model, log, episodes)
+
+
+def load_runs(directory, names, algo=None, device="cpu"):
+    """Nạp nhiều run một lượt -> dict tên -> TrainResult, đưa thẳng vào plot_*.
+
+    names: list tên session, hoặc dict {tên: algo}. algo không cho thì lấy `algo` chung, nếu cũng None thì đoán từ tên
+    ("dqn" có trong tên -> dqn, ngược lại ppo). Chỉ nạp model qua load_run nên cần đủ file .pt."""
+    algos = names if isinstance(names, dict) else {}
+    out = {}
+    for name in names:
+        a = algos.get(name) or algo or ("dqn" if "dqn" in name.lower() else "ppo")
+        out[name] = load_run(directory, name, a, device)
+    return out

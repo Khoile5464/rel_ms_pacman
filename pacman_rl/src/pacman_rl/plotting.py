@@ -118,6 +118,22 @@ def plot_training(runs, random_scores=None, save_path=None, show=True, bin_size=
     return fig
 
 
+def compare(names, directory="runs", random_scores=None, metrics=("ent",), algo=None, device="cpu",
+            save_path=None, show=True, bin_size=100_000):
+    """So sánh nhiều session: chỉ cần list tên (hoặc dict {tên: algo}). Nạp các run rồi vẽ plot_training,
+    plot_events và từng chỉ số trong `metrics` (run không có chỉ số thì bỏ qua). Trả về dict tên -> TrainResult."""
+    from .runs import load_runs
+    runs = load_runs(directory, names, algo, device)
+    plot_training(runs, random_scores, save_path, show, bin_size)
+    plot_events(runs, bin_size=bin_size)
+    for key in metrics:
+        plt.figure(figsize=(6, 4))
+        plot_metric(runs, key)
+    if show:
+        plt.show()
+    return runs
+
+
 def plot_eval(results, save_path=None, show=True):
     """Boxplot điểm đánh giá cuối. results: dict tên -> list điểm. Đồng thời in bảng mean/std/max."""
     print(f"{'Method':8s} {'mean':>8s} {'std':>8s} {'max':>8s}")

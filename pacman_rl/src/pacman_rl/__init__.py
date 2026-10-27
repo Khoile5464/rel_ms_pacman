@@ -16,7 +16,7 @@ _EXPORTS = {
     "models": ["ActorCriticCNN", "QNetwork"],
     "agents": ["PPOConfig", "train_ppo", "DQNConfig", "train_dqn", "TrainResult"],
     "evaluation": ["evaluate", "watch", "run_episodes", "random_baseline", "ppo_policy", "dqn_policy"],
-    "runs": ["save_run", "load_run", "load_model"],
+    "runs": ["save_run", "load_run", "load_runs", "load_model"],
     "utils": ["get_device", "describe_device", "set_seed", "moving_avg"],
 }
 _WHERE = {name: mod for mod, names in _EXPORTS.items() for name in names}
