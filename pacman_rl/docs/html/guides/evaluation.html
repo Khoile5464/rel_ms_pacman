@@ -76,7 +76,7 @@ plot_eval(results, save_path="eval.png")      # in bảng mean/std/max và vẽ 
 </code></pre>
 
 <h2 id="custom">Tự viết policy</h2>
-<p>Một policy chỉ là hàm <code>act(obs) -> int</code> với <code>obs</code> là <code>np.ndarray</code> <code>uint8</code> hình <code>(4, 84, 84)</code>. Nhờ vậy bạn có thể đo bất kỳ thứ gì bằng cùng cách:</p>
+<p>Một policy chỉ là hàm <code>act(obs) -> int</code> với <code>obs</code> là <code>np.ndarray</code> <code>uint8</code> hình <code>(4, 84, 84)</code> (hoặc <code>(12, 84, 84)</code> với model RGB; <code>ppo_policy</code> / <code>dqn_policy</code> tự cho <code>evaluate</code> / <code>watch</code> biết để dựng đúng env). Nhờ vậy bạn có thể đo bất kỳ thứ gì bằng cùng cách:</p>
 <pre><code class="language-python">import random
 from pacman_rl import evaluate
 

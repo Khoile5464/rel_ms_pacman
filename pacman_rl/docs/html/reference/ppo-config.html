@@ -43,6 +43,9 @@ cfg = PPOConfig(total_steps=2_000_000, n_envs=16, lr=2.5e-4)   # chỉ ghi các 
 <tr><td><a href="#save_every"><code>save_every</code></a></td><td class="num">200</td><td>Ghi/lưu</td><td>Lưu checkpoint mỗi N update</td></tr>
 <tr><td><a href="#reward_fn"><code>reward_fn</code></a></td><td><code>log_reward</code></td><td>Reward</td><td>Biến đổi reward thật thành reward học</td></tr>
 <tr><td><a href="#death_penalty"><code>death_penalty</code></a></td><td class="num">0.0</td><td>Reward</td><td>Trừ điểm reward học khi mất mạng</td></tr>
+<tr><td><a href="#step_penalty"><code>step_penalty</code></a></td><td class="num">0.0</td><td>Reward</td><td>Trừ điểm reward học mỗi bước env</td></tr>
+<tr><td><a href="#penalty_schedule"><code>penalty_schedule</code></a></td><td><code>None</code></td><td>Reward</td><td>Lịch trình phạt theo tiến độ train</td></tr>
+<tr><td><a href="#rgb_scale"><code>rgb_scale</code></a></td><td><code>False</code></td><td>Đầu vào</td><td>Ảnh RGB (12 kênh) thay cho ảnh xám (4 kênh)</td></tr>
 </tbody></table></div>
 
 <h2 id="derived">Đại lượng dẫn xuất</h2>
@@ -246,6 +249,33 @@ cfg = PPOConfig(total_steps=2_000_000, n_envs=16, lr=2.5e-4)   # chỉ ghi các 
 <dl>
 <dt>Điều khiển</dt><dd>Chỉ reward học (cùng thang với <code>reward_fn</code>: chấm nhỏ ≈ 0.69, viên năng lượng ≈ 1.79). Điểm báo cáo, số viên năng lượng và số ma vẫn tính từ reward thật.</dd>
 <dt>Khi nào chỉnh</dt><dd>Khi agent hay lao vào ma. Giá trị thử: 1 đến 3. Phạt quá lớn khiến agent né ma quá mức và đứng yên.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="step_penalty"><code>step_penalty</code> <span class="type">float</span> <span class="default">mặc định 0.0</span></h3>
+<p>Số điểm trừ khỏi <strong>reward học</strong> ở mỗi bước env: <code>reward_học = reward_fn(reward) - step_penalty - death_penalty * died</code>. Mặc định 0 là không phạt.</p>
+<dl>
+<dt>Điều khiển</dt><dd>Chỉ reward học, giống <code>death_penalty</code>. Dùng để ép agent không đứng yên hoặc lang thang.</dd>
+<dt>Lưu ý</dt><dd>Đừng đặt cùng lúc với một <code>reward_fn</code> đã tự trừ phạt mỗi bước, vì sẽ bị phạt hai lần.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="penalty_schedule"><code>penalty_schedule</code> <span class="type">Callable | None</span> <span class="default">mặc định None</span></h3>
+<p>Hàm <code>tiến_độ -&gt; (death_penalty, step_penalty)</code>, gọi lại mỗi update với <code>tiến_độ = update / tổng update</code> trong [0, 1]. <code>None</code> thì dùng hai hằng số <code>death_penalty</code> và <code>step_penalty</code>.</p>
+<dl>
+<dt>Dựng nhanh</dt><dd><code>piecewise_penalty([(tiến_độ, death_penalty, step_penalty), ...])</code> nội suy tuyến tính giữa các mốc, ngoài khoảng mốc thì giữ giá trị mốc đầu / cuối. Ví dụ <code>piecewise_penalty([(0, 2.5, 0.0), (0.3, 2.5, 0.0), (0.6, 20, 0.1)])</code> giữ 2.5 / 0 tới 30% đầu rồi tăng dần lên 20 / 0.1 ở 60%.</dd>
+<dt>Ghi log</dt><dd>Giá trị đang dùng được ghi vào <code>log["death_penalty"]</code> và <code>log["step_penalty"]</code>, và hiện trong dòng in mỗi <code>log_every</code> update.</dd>
+</dl>
+</section>
+
+<section class="param">
+<h3 id="rgb_scale"><code>rgb_scale</code> <span class="type">bool</span> <span class="default">mặc định False</span></h3>
+<p><code>False</code>: agent thấy 4 frame xám, quan sát <code>(4, 84, 84)</code>. <code>True</code>: 4 frame RGB gộp kênh thành <code>(12, 84, 84)</code>.</p>
+<dl>
+<dt>Đánh đổi</dt><dd>Bộ nhớ rollout và băng thông CPU→GPU tăng khoảng 3 lần; số tham số gần như không đổi (chỉ lớp conv đầu rộng hơn). Đổi lại agent thấy được màu, ví dụ ma chuyển xanh khi ăn viên năng lượng.</dd>
+<dt>Tự nhận biết</dt><dd><code>load_model</code> đọc số kênh từ checkpoint, và <code>ppo_policy</code> / <code>dqn_policy</code> báo cho <code>evaluate</code> / <code>watch</code> dựng env cùng loại, nên không cần cấu hình lại khi đánh giá. Chỉ PPO hỗ trợ; DQN vẫn dùng ảnh xám.</dd>
 </dl>
 </section>
 

@@ -96,6 +96,15 @@ plot_metric(runs, "q_mean")        # một chỉ số bất kỳ trong log; run 
 plot_training(runs, save_path="compare.png")
 </code></pre>
 
+<p>Khi có nhiều run trong một thư mục, <code>compare()</code> nạp và vẽ giúp. Bỏ <code>names</code> thì lấy tất cả run <code>.pt</code> trong <code>directory</code> (xem tên bằng <code>list_runs</code>):</p>
+<pre><code class="language-python">from pacman_rl.plotting import compare
+from pacman_rl.runs import list_runs
+
+list_runs("runs")                              # tên mọi run trong thư mục
+runs = compare(directory="runs", metrics=("ent",))     # hoặc compare(["ppo_a", "ppo_b"])
+</code></pre>
+<p>Ngoài <code>plot_training</code>, <code>compare</code> vẽ thêm bảng xếp hạng <code>plot_ranking</code> (điểm trung bình 50 ván cuối, kèm độ lệch chuẩn), các biểu đồ sự kiện và từng chỉ số trong <code>metrics</code>. Từ 4 run trở lên, biểu đồ bỏ chấm điểm thô, dùng đường mảnh hơn và gộp chú thích thành một chú thích chung ở dưới figure.</p>
+
 <h3 id="seeds">Trung bình nhiều seed</h3>
 <p>Một run đơn lẻ không đủ tin cậy. Đoạn sau nội suy đường trung bình trượt của từng seed về cùng một trục bước rồi vẽ trung bình kèm dải ±1 độ lệch chuẩn:</p>
 <pre><code class="language-python">import numpy as np

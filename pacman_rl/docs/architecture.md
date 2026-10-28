@@ -22,7 +22,7 @@ Mũi tên `A → B` nghĩa là A import B. Không có vòng import.
 
 | Module | Trách nhiệm | Nội dung chính |
 |---|---|---|
-| `envs/factory.py` | tạo một env đã tiền xử lý | `make_env`, `ENV_ID`, `N_ACTIONS`, `OBS_SHAPE` |
+| `envs/factory.py` | tạo một env đã tiền xử lý | `make_env`, `obs_shape`, `ENV_ID`, `N_ACTIONS`, `OBS_SHAPE` |
 | `envs/wrappers.py` | đổi tín hiệu kết thúc khi học, đánh dấu mất mạng | `EpisodicLife` |
 | `envs/vector.py` | chạy nhiều env song song, xen kẽ với GPU | `PipelinedEnvs`, `pop_game_scores`, `pop_deaths` |
 | `envs/rewards.py` | biến đổi reward, đếm sự kiện | `log_reward`, `count_events` |
@@ -41,10 +41,10 @@ Mũi tên `A → B` nghĩa là A import B. Không có vòng import.
  16 process con (AsyncVectorEnv), chia 2 nhóm x 8
  ┌───────────────────────────────────────────────────────┐
  │ gym.make(ALE/MsPacman-v5)                             │
- │   → AtariPreprocessing (skip 4, xám, 84x84, noop 30)  │
+ │   → AtariPreprocessing (skip 4, xám/RGB, 84x84, noop 30)│
  │   → EpisodicLife (mất mạng = done, ghi game_score,        │
  │                    life_lost)                          │
- │   → FrameStack(4)            → obs uint8 (4,84,84)    │
+ │   → FrameStack(4)   → obs uint8 (4,84,84) hoặc RGB (12,84,84) │
  └───────────────┬───────────────────────▲───────────────┘
    obs, reward thật, done, game_score, died │ action
                  ▼                       │
@@ -53,7 +53,7 @@ Mũi tên `A → B` nghĩa là A import B. Không có vòng import.
                  ├─ count_events(reward thật) → log["pellets"], log["ghosts"]
                  ├─ died                     → log["deaths"]
                  ├─ game_score               → episodes [(bước, điểm thật)]
-                 └─ cfg.reward_fn(reward) - cfg.death_penalty * died
+                 └─ cfg.reward_fn(reward) - step_pen - death_pen * died
                                              → reward dùng để học
                                   │
      PPO: B_rew → GAE → clipped loss       DQN: replay buffer → Bellman / Huber
@@ -68,7 +68,7 @@ Trong lúc CPU chạy emulator cho nhóm 0, GPU tính action cho nhóm 1, và ng
 | | Ở đâu | Dùng để |
 |---|---|---|
 | reward thật (0, 10, 50, 200...) | `reward` trả về từ `envs.recv` | đếm sự kiện, báo cáo |
-| reward học (`log1p(r/10)`, mặc định, trừ `death_penalty` khi mất mạng) | `cfg.reward_fn(reward) - cfg.death_penalty * died` | gradient |
+| reward học (`log1p(r/10)`, mặc định, trừ phạt chết / phạt bước) | `cfg.reward_fn(reward) - step_pen - death_pen * died` (PPO; `death_pen`, `step_pen` lấy từ `death_penalty`, `step_penalty` hoặc `penalty_schedule`) | gradient |
 | điểm cả ván 3 mạng | `info["game_score"]` → `episodes` | đường học, so sánh |
 
 Đánh giá (`evaluation.py`) luôn chạy game đầy đủ 3 mạng, không `EpisodicLife`, và cộng reward thật.

@@ -54,6 +54,15 @@ plot_events(runs)                                # viên năng lượng / ma ăn
 plot_metric(runs, "q_mean")                      # chỉ số bất kỳ trong log; run không có thì bỏ qua
 ```
 
+So sánh nhiều run: `compare()` (không đối số `names`) nạp tất cả run `.pt` trong `runs/` rồi vẽ tổng hợp, bảng xếp hạng điểm TB 50 ván cuối (`plot_ranking`), sự kiện và các chỉ số. Từ 4 run trở lên, biểu đồ bỏ chấm điểm thô và dùng một chú thích chung ở dưới.
+
+```python
+from pacman_rl.plotting import compare
+from pacman_rl.runs import list_runs
+list_runs("runs")                                # tên mọi run trong thư mục
+compare(directory="runs", metrics=("ent",))     # hoặc compare(["ppo_a", "ppo_b"])
+```
+
 Các hàm `plot_*` nhỏ nhận `ax=` (hoặc `axes=`) để ghép vào figure của bạn.
 
 ### Chấm điểm và xem chơi
@@ -72,7 +81,7 @@ plot_eval({"Random": random_baseline(5),
 watch(act_ppo, episodes=2)                           # mở cửa sổ game, cần màn hình
 ```
 
-Policy chỉ là hàm `obs (4,84,84) uint8 -> int`, nên tự viết policy khác (luật cứng, mạng khác...) rồi đưa vào `evaluate` / `watch` được.
+Policy chỉ là hàm `obs (4,84,84) hoặc (12,84,84) uint8 -> int` (4 kênh = xám, 12 kênh = RGB), nên tự viết policy khác (luật cứng, mạng khác...) rồi đưa vào `evaluate` / `watch` được.
 
 ## 2. Dòng lệnh
 

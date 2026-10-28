@@ -19,11 +19,11 @@
 <h2 id="imports">Cách import</h2>
 <pre><code class="language-python"># nạp lười: `import pacman_rl` không kéo torch, chỉ khi dùng đến tên bên dưới mới nạp module chứa nó
 from pacman_rl import (
-    PPOConfig, train_ppo, DQNConfig, train_dqn, TrainResult,       # agents
+    PPOConfig, piecewise_penalty, train_ppo, DQNConfig, train_dqn, TrainResult,   # agents
     ActorCriticCNN, QNetwork,                                      # models
     evaluate, watch, run_episodes, random_baseline,                # evaluation
     ppo_policy, dqn_policy,
-    save_run, load_run, load_model,                                # runs
+    save_run, load_run, load_runs, load_model,                     # runs
     get_device, describe_device, set_seed, moving_avg,             # utils
     make_env, PipelinedEnvs, EpisodicLife, log_reward, count_events, ENV_ID, N_ACTIONS,   # envs
 )
@@ -31,7 +31,7 @@ from pacman_rl.plotting import plot_training, plot_scores, plot_metric, plot_eve
 </code></pre>
 <div class="callout note">
 <p class="callout-title">Một "policy" là gì</p>
-<p>Ở nhiều chỗ (<code>evaluate</code>, <code>watch</code>) "policy" là một hàm <code>act_fn(obs) -> int</code>, trong đó <code>obs</code> là mảng numpy <code>uint8</code> hình <code>(4, 84, 84)</code> và kết quả là chỉ số action 0 đến 8. Tự viết hàm như vậy (luật cứng, mạng khác...) là đủ để dùng với mọi hàm đánh giá.</p>
+<p>Ở nhiều chỗ (<code>evaluate</code>, <code>watch</code>) "policy" là một hàm <code>act_fn(obs) -> int</code>, trong đó <code>obs</code> là mảng numpy <code>uint8</code> hình <code>(4, 84, 84)</code> (ảnh xám) hoặc <code>(12, 84, 84)</code> (RGB) và kết quả là chỉ số action 0 đến 8. Tự viết hàm như vậy (luật cứng, mạng khác...) là đủ để dùng với mọi hàm đánh giá.</p>
 </div>
 
 <h2 id="agents">pacman_rl.agents</h2>
@@ -92,12 +92,13 @@ from pacman_rl.plotting import plot_training, plot_scores, plot_metric, plot_eve
 <p>Gói này không import torch (xem <a href="../contributing/architecture.html#no-torch">Kiến trúc</a>).</p>
 
 <h3 id="make_env"><code>make_env</code></h3>
-<pre class="plain"><code>make_env(render_mode=None, episodic_life=False) -&gt; gymnasium.Env</code></pre>
-<p>Tạo một env đã tiền xử lý (frame-skip 4, xám, 84x84, noop reset tối đa 30, chồng 4 frame). <code>episodic_life=True</code> chỉ dùng khi học. <code>render_mode="human"</code> để mở cửa sổ.</p>
+<pre class="plain"><code>make_env(render_mode=None, episodic_life=False, rgb_scale=False) -&gt; gymnasium.Env
+obs_shape(rgb_scale=False) -&gt; tuple      # (4,84,84) hoặc (12,84,84)</code></pre>
+<p>Tạo một env đã tiền xử lý (frame-skip 4, xám hoặc RGB, 84x84, noop reset tối đa 30, chồng 4 frame). <code>rgb_scale=True</code> trả quan sát RGB <code>(12, 84, 84)</code> (4 frame x 3 kênh gộp thành kênh). <code>episodic_life=True</code> chỉ dùng khi học. <code>render_mode="human"</code> để mở cửa sổ.</p>
 
 <h3 id="PipelinedEnvs"><code>PipelinedEnvs</code></h3>
-<pre class="plain"><code>PipelinedEnvs(n_envs, n_groups=2, render=False)
-  .reset(seed=0)        -&gt; obs (n_envs,4,84,84)
+<pre class="plain"><code>PipelinedEnvs(n_envs, n_groups=2, render=False, rgb_scale=False)
+  .reset(seed=0)        -&gt; obs (n_envs,4,84,84), hoặc (n_envs,12,84,84) khi rgb_scale
   .send(g, actions)     # gửi action cho nhóm g, trả về ngay (step_async)
   .recv(g)              -&gt; (obs, reward_thật, done, danh_sách_điểm_ván_vừa_kết_thúc, died)
                         # died: float32 (gs,), 1.0 ở env vừa mất một mạng
@@ -113,12 +114,12 @@ from pacman_rl.plotting import plot_training, plot_scores, plot_metric, plot_eve
 count_events(reward) -&gt; (n_pellet, n_ghost)
 pop_game_scores(infos) -&gt; list[float]    # điểm các ván vừa kết thúc hẳn, từ info của vector env
 pop_deaths(infos, n) -&gt; np.ndarray      # float32 (n,), 1.0 ở env vừa mất mạng (info["life_lost"])</code></pre>
-<p>Hằng số: <code>ENV_ID</code>, <code>N_ACTIONS</code> (9), <code>OBS_SHAPE</code> ((4,84,84)), <code>PELLET_REWARD</code> (50), <code>GHOST_REWARDS</code> ((200,400,800,1600)). Ý nghĩa ở <a href="../concepts/environment.html">Môi trường và các loại điểm</a>.</p>
+<p>Hằng số: <code>ENV_ID</code>, <code>N_ACTIONS</code> (9), <code>OBS_SHAPE</code> ((4,84,84), mặc định xám; dùng <code>obs_shape(rgb_scale)</code> khi cần RGB), <code>PELLET_REWARD</code> (50), <code>GHOST_REWARDS</code> ((200,400,800,1600)). Ý nghĩa ở <a href="../concepts/environment.html">Môi trường và các loại điểm</a>.</p>
 
 <h2 id="evaluation">pacman_rl.evaluation</h2>
 
 <h3 id="ppo_policy"><code>ppo_policy</code>, <code>dqn_policy</code>, <code>random_policy</code></h3>
-<pre class="plain"><code>ppo_policy(model, device, greedy=False)   -&gt; act_fn
+<pre class="plain"><code>ppo_policy(model, device, greedy=False)   -&gt; act_fn   # act_fn.rgb_scale suy ra từ số kênh của model
 dqn_policy(model, device, eps=0.05)       -&gt; act_fn
 random_policy(n_actions)                  -&gt; act_fn</code></pre>
 <ul>
@@ -130,7 +131,7 @@ random_policy(n_actions)                  -&gt; act_fn</code></pre>
 <pre class="plain"><code>evaluate(act_fn, n_episodes=10, max_steps=4500, seed=1000)  -&gt; list[float]
 watch(act_fn, episodes=2, max_steps=4500)                   -&gt; list[float]     # mở cửa sổ
 run_episodes(act_fn, n_episodes=10, max_steps=4500, seed=None,
-             render_mode=None, verbose=False)               -&gt; list[float]
+             render_mode=None, verbose=False, rgb_scale=None) -&gt; list[float]   # rgb_scale=None: theo act_fn
 random_baseline(n_episodes=5, n_actions=9)                  -&gt; list[float]</code></pre>
 <ul>
 <li>Tất cả chạy game đầy đủ 3 mạng và trả về danh sách <strong>điểm thật</strong> mỗi ván.</li>
@@ -142,15 +143,21 @@ random_baseline(n_episodes=5, n_actions=9)                  -&gt; list[float]</c
 <h2 id="runs">pacman_rl.runs</h2>
 <pre class="plain"><code>save_run(result, directory, name, append=True) -&gt; (path_model, path_episodes, path_log)
 load_run(directory, name, algo, device="cpu") -&gt; TrainResult
-load_model(path, algo, device="cpu", n_actions=N_ACTIONS) -&gt; nn.Module  # chế độ eval
+load_model(path, algo, device="cpu", n_actions=N_ACTIONS) -&gt; nn.Module  # chế độ eval; số kênh (4/12) đọc từ checkpoint
+load_runs(directory, names=None, algo=None, device="cpu") -&gt; dict[tên, TrainResult]
+list_runs(directory) -&gt; list[str]            # tên mọi run (file .pt) trong thư mục, sắp theo tên
 run_paths(directory, name)                   -&gt; (path_model, path_episodes, path_log)</code></pre>
 <p><code>save_run</code> với <code>append=True</code> (mặc định): nếu run <code>name</code> đã có trong <code>directory</code> thì episodes và log của lần train này được <strong>nối vào sau</strong> kết quả cũ, bước env tiếp nối từ bước cuối của lần cũ (các chỉ số tích luỹ <code>pellets</code>, <code>ghosts</code>, <code>deaths</code> cũng cộng tiếp; run cũ chưa có <code>deaths</code> thì đệm NaN); model <code>.pt</code> luôn được ghi đè bằng bản mới nhất. Chưa có run cùng tên thì tạo mới. <code>append=False</code> ghi đè hoàn toàn. Đừng gọi <code>save_run</code> hai lần với cùng một <code>result</code>, sẽ bị nối trùng.</p>
-<p><code>algo</code> là <code>"ppo"</code> hoặc <code>"dqn"</code>. <code>load_run</code> chấp nhận thiếu file log/episodes (trả về rỗng, chỉ còn model). Định dạng file ở <a href="files-and-logs.html#files">File lưu và log</a>.</p>
+<p><code>algo</code> là <code>"ppo"</code> hoặc <code>"dqn"</code>. <code>load_run</code> chấp nhận thiếu file log/episodes (trả về rỗng, chỉ còn model). <code>load_runs</code> nạp nhiều run một lượt: <code>names</code> là list tên, dict <code>{tên: algo}</code>, hoặc <code>None</code> để lấy tất cả run trong <code>directory</code>; <code>algo</code> không cho thì đoán từ tên ("dqn" có trong tên thì là dqn, ngược lại ppo). Định dạng file ở <a href="files-and-logs.html#files">File lưu và log</a>.</p>
 
 <h2 id="plotting">pacman_rl.plotting</h2>
 <p>Mọi hàm nhận <code>runs</code>: dict <em>tên → TrainResult</em> (hoặc tuple <code>(model, log, episodes)</code>), nên vẽ một hay nhiều run đều cùng một cách. Nhiều hàm nhận <code>ax=</code> / <code>axes=</code> để ghép vào figure của bạn.</p>
 <pre class="plain"><code>plot_training(runs, random_scores=None, save_path=None, show=True, bin_size=100_000) -&gt; Figure   # 6 biểu đồ tổng hợp (lưới 2x3)
-plot_scores(runs, random_scores=None, w=20, ax=None)     # điểm từng ván + trung bình trượt w ván
+plot_scores(runs, random_scores=None, w=20, ax=None, scatter=None)   # trung bình trượt w ván; scatter=None: chấm điểm thô chỉ khi dưới 4 run
+plot_ranking(runs, last=50, ax=None)                     # thanh ngang xếp hạng run theo điểm TB last ván cuối (kèm std)
+compare(names=None, directory="runs", random_scores=None, metrics=("ent",), algo=None,
+        device="cpu", save_path=None, show=True, bin_size=100_000)   # nạp + vẽ nhiều run; names=None: tất cả run trong directory
+shared_legend(fig, axes, ncol=5) -&gt; float                # gộp chú thích các ô thành một chú thích chung dưới figure
 plot_metric(runs, key, title=None, ax=None)              # một chỉ số bất kỳ trong log
 plot_events(runs, total=None, bin_size=100_000, axes=None)   # viên năng lượng / ma / tỷ lệ
 plot_eval(results, save_path=None, show=True) -&gt; Figure   # boxplot điểm đánh giá; in bảng mean/std/max

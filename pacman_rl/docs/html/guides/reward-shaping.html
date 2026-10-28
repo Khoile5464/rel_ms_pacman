@@ -54,6 +54,19 @@ train_ppo(cfg, save_path="runs/ppo_death.pt")
 </code></pre>
 <p>Như mọi reward shaping, phạt này chỉ đổi reward học; điểm báo cáo, <code>pellets</code>, <code>ghosts</code> vẫn tính từ reward thật. Thang tham chiếu: viên năng lượng ≈ 1.79, ma ≈ 3.0 đến 5.1, nên 1 đến 3 là mức hợp lý để bắt đầu.</p>
 
+<h2 id="step-penalty">Phạt mỗi bước và lịch trình tăng dần (PPO)</h2>
+<p><code>PPOConfig</code> còn có <code>step_penalty</code> (mặc định <code>0.0</code>): trừ một lượng cố định ở mỗi bước env, nên reward học là <code>reward_fn(reward) - step_penalty - death_penalty * died</code>. Đừng dùng cùng một <code>reward_fn</code> đã tự trừ phạt mỗi bước, vì sẽ bị phạt hai lần.</p>
+<p>Để phạt nhẹ lúc đầu rồi tăng dần (curriculum), đặt <code>penalty_schedule</code>: hàm <code>tiến_độ (0 đến 1) -&gt; (death_penalty, step_penalty)</code>, tính lại mỗi update. <code>piecewise_penalty</code> dựng lịch trình nội suy tuyến tính giữa các mốc <code>(tiến_độ, death_penalty, step_penalty)</code>; ngoài khoảng mốc thì giữ giá trị mốc đầu / cuối.</p>
+<pre><code class="language-python">from pacman_rl import PPOConfig, piecewise_penalty, train_ppo
+
+cfg = PPOConfig(penalty_schedule=piecewise_penalty([
+    (0.0, 2.5, 0.0), (0.3, 2.5, 0.0),   # 30% đầu: chỉ phạt chết nhẹ
+    (0.6, 20, 0.1),                     # tăng dần tới 60%, rồi giữ nguyên
+]))
+train_ppo(cfg, save_path="runs/ppo_curriculum.pt")
+</code></pre>
+<p>Mức phạt đang dùng được ghi vào <code>log["death_penalty"]</code> và <code>log["step_penalty"]</code> ở mỗi update, nên có thể vẽ lại lịch trình bằng <code>plot_metric(runs, "death_penalty")</code>. DQN chưa hỗ trợ <code>step_penalty</code> và <code>penalty_schedule</code>.</p>
+
 <h2 id="stateful">Ví dụ 2: phạt khi "đứng bí" (cần trạng thái)</h2>
 <p>Ý tưởng: không phạt đều mỗi bước, chỉ phạt khi một env đã đi quá <code>patience</code> bước liên tiếp mà không có reward dương. Ít can thiệp hơn phạt đều. Việc này cần <em>nhớ</em> số bước đứng bí của từng env, nên một hàm thuần không đủ; ta dùng một object có <code>__call__</code>.</p>
 <pre><code class="language-python">import numpy as np

@@ -10,6 +10,23 @@
 cfg = PPOConfig(death_penalty=2.5)
 ```
 
+**Phạt mỗi bước** cũng có trường riêng: `step_penalty` (mặc định `0.0`, chỉ PPO). Reward học khi đó là `reward_fn(reward) - step_penalty - death_penalty * died`. Đừng đặt đồng thời với một `reward_fn` đã tự trừ phạt mỗi bước, vì sẽ bị phạt hai lần.
+
+**Phạt tăng dần (curriculum)**: đặt `penalty_schedule` là hàm `tiến_độ (0 → 1) -> (death_penalty, step_penalty)`, tính lại mỗi update (PPO). `None` (mặc định) thì dùng hai hằng số ở trên. `piecewise_penalty` dựng lịch trình nội suy tuyến tính giữa các mốc `(tiến_độ, death_penalty, step_penalty)`; ngoài khoảng mốc thì giữ giá trị của mốc đầu / cuối:
+
+```python
+from pacman_rl import PPOConfig, piecewise_penalty
+
+cfg = PPOConfig(penalty_schedule=piecewise_penalty([
+    (0.0, 2.5, 0.0), (0.3, 2.5, 0.0),   # 30% đầu: chỉ phạt chết nhẹ
+    (0.6, 20, 0.1),                     # tăng dần tới 60%, rồi giữ nguyên
+]))
+```
+
+Giá trị phạt đang dùng được ghi vào `log["death_penalty"]` và `log["step_penalty"]` ở mỗi update.
+
+**Đầu vào RGB**: `PPOConfig(rgb_scale=True)` cho agent thấy ảnh màu (4 frame x 3 kênh = 12 kênh) thay vì ảnh xám (4 kênh). Mạng tự dựng với đúng số kênh, và `evaluate` / `watch` / `load_model` tự nhận ra từ model nên không cần cấu hình thêm. Hiện chỉ PPO hỗ trợ; DQN vẫn dùng ảnh xám.
+
 Ví dụ phạt nhỏ mỗi bước (mục 1 trong `notebooks/TODO_ms_pacman.md`):
 
 ```python

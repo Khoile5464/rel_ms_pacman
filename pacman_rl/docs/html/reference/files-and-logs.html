@@ -72,6 +72,9 @@ print("Số ván:", len(games), "| điểm 20 ván cuối:", games[-20:, 1].mean
 <tr><td><code>step</code></td><td>có</td><td>có</td><td>Bước env tại thời điểm ghi.</td></tr>
 <tr><td><code>pellets</code></td><td>có</td><td>có</td><td>Tổng tích lũy số viên năng lượng đã ăn (từ đầu run).</td></tr>
 <tr><td><code>ghosts</code></td><td>có</td><td>có</td><td>Tổng tích lũy số ma đã ăn.</td></tr>
+<tr><td><code>deaths</code></td><td>có</td><td>có</td><td>Tổng tích lũy số mạng đã mất.</td></tr>
+<tr><td><code>death_penalty</code></td><td>có</td><td>-</td><td>Phạt mất mạng đang dùng ở update đó (đổi theo <code>penalty_schedule</code> nếu có). Run cũ không có khóa này.</td></tr>
+<tr><td><code>step_penalty</code></td><td>có</td><td>-</td><td>Phạt mỗi bước đang dùng ở update đó. Run cũ không có khóa này.</td></tr>
 <tr><td><code>ent</code></td><td>có</td><td>-</td><td>Entropy trung bình của policy (minibatch cuối của update).</td></tr>
 <tr><td><code>kl</code></td><td>có</td><td>-</td><td>Xấp xỉ KL giữa policy cũ và mới: <code>mean(logp_old − logp_new)</code> trên minibatch cuối. Có thể âm nhẹ do nhiễu lấy mẫu.</td></tr>
 <tr><td><code>clipfrac</code></td><td>có</td><td>-</td><td>Tỷ lệ mẫu có <code>|ratio − 1| &gt; clip_eps</code> (bị cắt) ở minibatch cuối.</td></tr>

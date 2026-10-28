@@ -36,12 +36,12 @@
 <thead><tr><th>Lớp</th><th>Tác dụng</th><th>Thiết lập</th></tr></thead>
 <tbody>
 <tr><td><code>gym.make("ALE/MsPacman-v5")</code></td><td>Emulator gốc</td><td><code>frameskip=1</code> (để wrapper tự skip), <code>repeat_action_probability=0.0</code> (không có "sticky action", env thuần xác định), <code>full_action_space=False</code> (chỉ 9 action cần thiết)</td></tr>
-<tr><td><code>AtariPreprocessing</code></td><td>Xử lý ảnh và nhịp</td><td><code>frame_skip=4</code>, <code>screen_size=84</code>, <code>grayscale_obs=True</code>, <code>noop_max=30</code>, <code>scale_obs=False</code> (giữ <code>uint8</code> 0..255), <code>terminal_on_life_loss=False</code></td></tr>
+<tr><td><code>AtariPreprocessing</code></td><td>Xử lý ảnh và nhịp</td><td><code>frame_skip=4</code>, <code>screen_size=84</code>, <code>grayscale_obs=True</code> (<code>False</code> khi <code>rgb_scale</code>), <code>noop_max=30</code>, <code>scale_obs=False</code> (giữ <code>uint8</code> 0..255), <code>terminal_on_life_loss=False</code></td></tr>
 <tr><td><code>EpisodicLife</code></td><td>Chỉ khi học (<code>episodic_life=True</code>)</td><td>Mất mạng = <code>done</code>. Xem bên dưới.</td></tr>
-<tr><td><code>FrameStack(4)</code></td><td>Cho agent thấy chuyển động</td><td>Chồng 4 frame gần nhất thành quan sát <code>(4, 84, 84)</code></td></tr>
+<tr><td><code>FrameStack(4)</code></td><td>Cho agent thấy chuyển động</td><td>Chồng 4 frame gần nhất thành quan sát <code>(4, 84, 84)</code>. Với <code>rgb_scale=True</code> mỗi frame có 3 kênh màu và được gộp thành <code>(12, 84, 84)</code></td></tr>
 </tbody></table></div>
 
-<p>Kết quả mỗi bước agent nhận: mảng <code>uint8</code> hình <code>(4, 84, 84)</code>. Mạng neural chia cho 255 ở lớp đầu (<code>x.float() / 255.0</code>), nên bạn không cần chuẩn hóa ảnh ở đâu khác.</p>
+<p>Kết quả mỗi bước agent nhận: mảng <code>uint8</code> hình <code>(4, 84, 84)</code> (hoặc <code>(12, 84, 84)</code> khi dùng RGB). Mạng neural chia cho 255 ở lớp đầu (<code>x.float() / 255.0</code>), nên bạn không cần chuẩn hóa ảnh ở đâu khác.</p>
 
 <div class="callout note">
 <p class="callout-title"><code>noop_max=30</code> làm gì?</p>
@@ -74,10 +74,10 @@
 <thead><tr><th>Loại</th><th>Giá trị ví dụ</th><th>Lấy ở đâu</th><th>Dùng để</th></tr></thead>
 <tbody>
 <tr><td><strong>Reward thật</strong></td><td>0, 10, 50, 200 ...</td><td><code>reward</code> trả về từ <code>PipelinedEnvs.recv</code></td><td>Đếm sự kiện (<code>count_events</code>). Không dùng để học.</td></tr>
-<tr><td><strong>Reward học</strong></td><td>0, 0.69, 1.79, 3.04 ...</td><td><code>cfg.reward_fn(reward) - cfg.death_penalty * died</code> (mặc định <code>log_reward</code>, <code>death_penalty = 0</code>)</td><td>Tính gradient. Đây là thứ agent thực sự "nhìn thấy".</td></tr>
+<tr><td><strong>Reward học</strong></td><td>0, 0.69, 1.79, 3.04 ...</td><td><code>cfg.reward_fn(reward) - step_pen - death_pen * died</code> (mặc định <code>log_reward</code>, hai mức phạt bằng 0; với PPO lấy từ <code>step_penalty</code> / <code>death_penalty</code> hoặc <code>penalty_schedule</code>)</td><td>Tính gradient. Đây là thứ agent thực sự "nhìn thấy".</td></tr>
 <tr><td><strong>Điểm cả ván</strong></td><td>vài trăm đến vài nghìn</td><td><code>info["game_score"]</code> → danh sách <code>episodes</code></td><td>Đường học, <code>avg score(20)</code>, so sánh các phương pháp.</td></tr>
 </tbody></table></div>
-<p>Thay <code>reward_fn</code> hoặc đặt <code>death_penalty</code> (reward shaping) chỉ đổi loại thứ hai. Hai loại còn lại luôn tính từ điểm thật nên biểu đồ vẫn so sánh được giữa các cấu hình reward khác nhau.</p>
+<p>Thay <code>reward_fn</code> hoặc đặt <code>death_penalty</code> / <code>step_penalty</code> (reward shaping) chỉ đổi loại thứ hai. Hai loại còn lại luôn tính từ điểm thật nên biểu đồ vẫn so sánh được giữa các cấu hình reward khác nhau.</p>
 
 <h3 id="log-reward">Vì sao reward học là <code>log1p(r / 10)</code></h3>
 <p>Điểm thật nhảy từ 10 (chấm nhỏ) tới 1600 (ma thứ tư), chênh nhau 160 lần. Gradient tỉ lệ với reward nên các sự kiện lớn sẽ lấn át mọi thứ. Hàm <code>log_reward</code> nén thang đó mà vẫn giữ thứ tự: sự kiện nào đáng giá hơn thì reward lớn hơn.</p>
