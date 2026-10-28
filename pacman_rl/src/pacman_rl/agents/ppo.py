@@ -38,6 +38,23 @@ class PPOConfig:
     # reward thật (mảng n_envs) -> reward dùng để học
     reward_fn: Callable = log_reward
     death_penalty: float = 0.0      # trừ điểm khi mất mạng (mất mạng = done)
+    step_penalty: float = 0.0       # trừ mỗi bước env (đừng dùng cùng lúc với step_penalty trong reward_fn, sẽ bị phạt hai lần)
+    # tuỳ chọn: hàm tiến độ (0 -> 1) -> (death_penalty, step_penalty), tính lại mỗi update.
+    # None = dùng hai hằng số ở trên. Xem piecewise_penalty để dựng lịch trình tăng dần.
+    penalty_schedule: Callable | None = None
+    rgb_scale: bool = False             # True: đầu vào RGB (12 kênh), False: xám (4 kênh)
+
+
+def piecewise_penalty(points):
+    """Dựng penalty_schedule nội suy tuyến tính giữa các mốc (tiến độ, death_penalty, step_penalty).
+    Tiến độ = update / tổng update, trong [0, 1]; ngoài khoảng mốc thì giữ giá trị của mốc đầu / cuối.
+    Ví dụ: piecewise_penalty([(0, 2.5, 0.0), (0.3, 2.5, 0.0), (0.6, 20, 0.1)])
+    giữ 2.5 / 0 tới 30% đầu, tăng dần lên 20 / 0.1 ở 60%, rồi giữ nguyên."""
+    pts = sorted(points)
+    xs = [p[0] for p in pts]
+    def schedule(progress):
+        return tuple(float(np.interp(progress, xs, [p[i] for p in pts])) for i in (1, 2))
+    return schedule
 
 
 def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False,
@@ -56,17 +73,20 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
         save_path = Path(save_path)
         # tạo thư mục từ đầu, tránh train xong mới lỗi khi lưu
         save_path.parent.mkdir(parents=True, exist_ok=True)
-    envs = PipelinedEnvs(cfg.n_envs, render=render)
+    envs = PipelinedEnvs(cfg.n_envs, render=render, rgb_scale=cfg.rgb_scale)
     obs = torch.as_tensor(envs.reset(seed=cfg.seed), device=device)
+    obs_shape = tuple(obs.shape[1:])
 
-    model = (model or ActorCriticCNN(envs.n_actions)).to(device)
+    model = (model or ActorCriticCNN(envs.n_actions, in_channels=obs_shape[0])).to(device)
+    assert model.cnn[0].in_channels == obs_shape[0], \
+        f"model nhận {model.cnn[0].in_channels} kênh nhưng env (rgb_scale={cfg.rgb_scale}) trả {obs_shape[0]} kênh"
     optimizer = optim.Adam(model.parameters(), lr=cfg.lr, eps=1e-5)
 
     n_envs, n_steps = cfg.n_envs, cfg.n_steps
     batch = n_envs * n_steps
     mb_size = batch // cfg.n_minibatches
     n_updates = cfg.total_steps // batch
-    B_obs = torch.zeros((n_steps, n_envs, 4, 84, 84),
+    B_obs = torch.zeros((n_steps, n_envs, *obs_shape),
                         dtype=torch.uint8, device=device)
     B_act = torch.zeros((n_steps, n_envs), dtype=torch.long, device=device)
     B_logp = torch.zeros((n_steps, n_envs), device=device)
@@ -76,7 +96,8 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
 
     ep_log = []
     log = {"step": [], "ent": [], "kl": [], "clipfrac": [],
-           "v_loss": [], "pg_loss": [], "pellets": [], "ghosts": [], "deaths": []}
+           "v_loss": [], "pg_loss": [], "pellets": [], "ghosts": [], "deaths": [],
+           "death_penalty": [], "step_penalty": []}
     # n_pellet / n_ghost / n_death: tổng số viên năng lượng / ma đã ăn / mạng đã mất
     global_step, t0, n_pellet, n_ghost, n_death = 0, time.time(), 0, 0, 0
     last = {"step": 0, "death": 0, "pellet": 0, "ghost": 0}              # mốc của lần in trước, để in số liệu riêng của cửa sổ log gần nhất
@@ -94,6 +115,8 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
         for update in range(n_updates):
             for g in optimizer.param_groups:                   # giảm lr tuyến tính
                 g["lr"] = cfg.lr * (1.0 - update / n_updates)
+            death_pen, step_pen = (cfg.penalty_schedule(update / n_updates) if cfg.penalty_schedule
+                                   else (cfg.death_penalty, cfg.step_penalty))
 
             # ---- Pha 1: thu thập rollout (2 nhóm env xen kẽ: GPU chọn action nhóm này khi CPU đang chạy nhóm kia) ----
             for g in range(envs.G):
@@ -102,7 +125,7 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
                 for g in range(envs.G):
                     sl = envs.slices[g]
                     next_obs, reward, done, scores, died = envs.recv(g)
-                    r = cfg.reward_fn(reward) - cfg.death_penalty * died
+                    r = cfg.reward_fn(reward) - step_pen - death_pen * died
                     global_step += envs.gs
                     # điểm thật của ván vừa hết 3 mạng
                     ep_log.extend((global_step, s) for s in scores)
@@ -132,7 +155,7 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
             returns = adv + B_val
 
             # ---- Pha 3: cập nhật PPO ----
-            f_obs = B_obs.reshape(batch, 4, 84, 84)
+            f_obs = B_obs.reshape(batch, *obs_shape)
             f_act, f_logp = B_act.reshape(-1), B_logp.reshape(-1)
             f_adv, f_ret = adv.reshape(-1), returns.reshape(-1)
             for _ in range(cfg.epochs):
@@ -159,7 +182,7 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
             with torch.no_grad():                              # chỉ số của minibatch cuối, đủ để theo dõi xu hướng
                 kl = (f_logp[idx] - logp).mean().item()
                 cf = ((ratio - 1).abs() > cfg.clip_eps).float().mean().item()
-            for k, v in zip(log, [global_step, entropy.item(), kl, cf, v_loss.item(), pg_loss.item(), n_pellet, n_ghost, n_death]):
+            for k, v in zip(log, [global_step, entropy.item(), kl, cf, v_loss.item(), pg_loss.item(), n_pellet, n_ghost, n_death, death_pen, step_pen]):
                 log[k].append(v)
 
             if watch_every and global_step // watch_every > (global_step - batch) // watch_every:
@@ -180,7 +203,7 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
                 last.update(step=global_step, death=n_death, pellet=n_pellet, ghost=n_ghost)
                 print(f"Update {update + 1}/{n_updates} | step {global_step:,} | "
                       f"avg score(20) {np.mean(recent) if recent else float('nan'):.0f} | "
-                      f"{window} | entropy {entropy.item():.3f} | KL {kl:.4f} | clipfrac {cf:.3f} | "
+                      f"{window} | phạt chết {death_pen:.1f} bước {step_pen:.3f} | entropy {entropy.item():.3f} | KL {kl:.4f} | clipfrac {cf:.3f} | "
                       f"{global_step / (time.time() - t0):.0f} steps/s")
     except KeyboardInterrupt:                                  # bấm Stop/Ctrl+C: vẫn lưu và trả về phần đã train
         print(f"Dừng sớm ở step {global_step:,}")

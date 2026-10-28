@@ -1,6 +1,6 @@
 """Mạng neural: thân CNN Nature DQN (Mnih 2015) dùng chung, đầu actor-critic cho PPO, đầu Q cho DQN.
 
-input (4,84,84) uint8 -> chia 255
+input (4,84,84) uint8 (xám) hoặc (12,84,84) (4 frame RGB gộp kênh) -> chia 255
 Conv 32 8x8 s4 + ReLU -> (32,20,20)
 Conv 64 4x4 s2 + ReLU -> (64, 9, 9)
 Conv 64 3x3 s1 + ReLU -> (64, 7, 7)
@@ -12,9 +12,10 @@ import torch.nn as nn
 from torch.distributions import Categorical
 
 
-def make_cnn():
+def make_cnn(in_channels=4):
+    """in_channels: 4 (xám) hoặc 12 (RGB)."""
     return nn.Sequential(
-        nn.Conv2d(4, 32, 8, stride=4), nn.ReLU(),
+        nn.Conv2d(in_channels, 32, 8, stride=4), nn.ReLU(),
         nn.Conv2d(32, 64, 4, stride=2), nn.ReLU(),
         nn.Conv2d(64, 64, 3, stride=1), nn.ReLU(),
         nn.Flatten(),
@@ -23,9 +24,9 @@ def make_cnn():
 
 
 class ActorCriticCNN(nn.Module):
-    def __init__(self, n_actions):
+    def __init__(self, n_actions, in_channels=4):
         super().__init__()
-        self.cnn = make_cnn()
+        self.cnn = make_cnn(in_channels)
         self.actor = nn.Linear(512, n_actions)
         self.critic = nn.Linear(512, 1)
         # khởi tạo trực giao (chuẩn của PPO): actor nhỏ để policy ban đầu gần đều
@@ -35,7 +36,7 @@ class ActorCriticCNN(nn.Module):
         nn.init.orthogonal_(self.actor.weight, 0.01); nn.init.zeros_(self.actor.bias)
         nn.init.orthogonal_(self.critic.weight, 1.0); nn.init.zeros_(self.critic.bias)
 
-    def forward(self, x):                       # x: uint8 (B,4,84,84)
+    def forward(self, x):                       # x: uint8 (B,12,84,84)
         h = self.cnn(x.float() / 255.0)
         return Categorical(logits=self.actor(h)), self.critic(h).squeeze(-1)
 
@@ -52,10 +53,10 @@ class ActorCriticCNN(nn.Module):
 
 
 class QNetwork(nn.Module):
-    def __init__(self, n_actions):
+    def __init__(self, n_actions, in_channels=4):
         super().__init__()
-        self.cnn = make_cnn()
+        self.cnn = make_cnn(in_channels)
         self.head = nn.Linear(512, n_actions)
 
-    def forward(self, x):                       # x: uint8 (B,4,84,84)
+    def forward(self, x):                       # x: uint8 (B,12,84,84)
         return self.head(self.cnn(x.float() / 255.0))

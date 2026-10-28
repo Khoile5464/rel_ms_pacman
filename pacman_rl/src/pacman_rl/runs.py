@@ -65,8 +65,10 @@ def save_run(result, directory, name, append=True):
 
 def load_model(path, algo, device="cpu", n_actions=N_ACTIONS):
     """Nạp riêng model (algo = "ppo" hoặc "dqn"), để ở chế độ eval."""
-    model = MODEL_CLASSES[algo](n_actions).to(device)
-    model.load_state_dict(torch.load(path, map_location=device))
+    state = torch.load(path, map_location=device)
+    in_channels = state["cnn.0.weight"].shape[1]       # 4 (xám) hoặc 12 (RGB), đọc thẳng từ checkpoint
+    model = MODEL_CLASSES[algo](n_actions, in_channels=in_channels).to(device)
+    model.load_state_dict(state)
     return model.eval()
 
 
@@ -79,11 +81,20 @@ def load_run(directory, name, algo, device="cpu"):
     return TrainResult(model, log, episodes)
 
 
-def load_runs(directory, names, algo=None, device="cpu"):
+def list_runs(directory):
+    """Tên tất cả run trong thư mục (mỗi file {name}.pt là một run), sắp theo tên. Thư mục chưa có thì trả về []."""
+    d = Path(directory)
+    return sorted(p.stem for p in d.glob("*.pt")) if d.is_dir() else []
+
+
+def load_runs(directory, names=None, algo=None, device="cpu"):
     """Nạp nhiều run một lượt -> dict tên -> TrainResult, đưa thẳng vào plot_*.
 
-    names: list tên session, hoặc dict {tên: algo}. algo không cho thì lấy `algo` chung, nếu cũng None thì đoán từ tên
+    names: list tên session, hoặc dict {tên: algo}; None thì lấy tất cả run trong `directory` (xem list_runs).
+    algo không cho thì lấy `algo` chung, nếu cũng None thì đoán từ tên
     ("dqn" có trong tên -> dqn, ngược lại ppo). Chỉ nạp model qua load_run nên cần đủ file .pt."""
+    if names is None:
+        names = list_runs(directory)
     algos = names if isinstance(names, dict) else {}
     out = {}
     for name in names:
