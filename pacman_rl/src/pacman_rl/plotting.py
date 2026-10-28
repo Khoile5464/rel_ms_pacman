@@ -8,8 +8,33 @@ from .utils import moving_avg
 COLORS = {"PPO": "tab:blue", "DQN": "tab:orange"}
 
 
-def _color(name, i):
-    return COLORS.get(name, f"C{i}")
+MANY = 4  # từ số run này trở lên: bỏ chấm điểm thô, đường mảnh hơn, gộp chú thích thành một
+
+
+def _color(name, i, n=10):
+    if name in COLORS:
+        return COLORS[name]
+    return plt.get_cmap("tab10" if n <= 10 else "tab20")(i % (10 if n <= 10 else 20))
+
+
+def _lw(n):
+    return 1.6 if n < MANY else 1.1
+
+
+def shared_legend(fig, axes, ncol=5):
+    """Một chú thích chung dưới cùng figure thay cho chú thích lặp lại trên từng ô; trả về mép dưới (cho tight_layout)."""
+    seen = {}
+    for a in np.ravel(axes):
+        leg = a.get_legend()
+        if leg:
+            leg.remove()
+        for h, l in zip(*a.get_legend_handles_labels()):
+            seen.setdefault(l, h)
+    if not seen:
+        return 0
+    ncol = min(ncol, len(seen))
+    fig.legend(seen.values(), seen.keys(), loc="lower center", ncol=ncol, frameon=False, fontsize=9)
+    return 0.035 * -(-len(seen) // ncol) + 0.02
 
 
 def score_curve(episodes, w=20):
@@ -38,20 +63,37 @@ def per_life(ev, key):
     return np.divide(ev[key], d, out=np.full_like(d, np.nan, dtype=float), where=d > 0)
 
 
-def plot_scores(runs, random_scores=None, w=20, ax=None):
-    """Điểm thật từng ván theo số bước env, kèm trung bình trượt w ván."""
+def plot_scores(runs, random_scores=None, w=20, ax=None, scatter=None):
+    """Trung bình trượt w ván của điểm theo số bước env; scatter=None -> chỉ vẽ điểm thô từng ván khi ít run (< MANY)."""
     ax = ax or plt.gca()
+    n = len(runs)
+    scatter = n < MANY if scatter is None else scatter
     for i, (name, (_, _, eps)) in enumerate(runs.items()):
         if not eps:
             continue
-        st, sc = zip(*eps)
-        ax.scatter(st, sc, s=4, alpha=0.15, color=_color(name, i))
+        c = _color(name, i, n)
+        if scatter:
+            st, sc = zip(*eps)
+            ax.scatter(st, sc, s=4, alpha=0.15, color=c)
         x, y = score_curve(eps, w)
-        ax.plot(x, y, color=_color(name, i), label=f"{name} (TB trượt {w} ván)")
+        ax.plot(x, y, color=c, lw=_lw(n), label=name)
     if random_scores is not None:
         ax.axhline(np.mean(random_scores), ls="--", color="gray", label="Random")
-    ax.set(title="Điểm theo số bước tương tác", xlabel="Bước env", ylabel="Điểm Ms. Pacman")
+    ax.set(title=f"Điểm (TB trượt {w} ván)", xlabel="Bước env", ylabel="Điểm Ms. Pacman")
     ax.legend()
+    return ax
+
+
+def plot_ranking(runs, last=50, ax=None):
+    """Thanh ngang xếp hạng các run theo điểm TB `last` ván cuối (kèm std) - gọn khi có nhiều run."""
+    ax = ax or plt.gca()
+    n = len(runs)
+    rows = [(name, np.mean([e[1] for e in eps[-last:]]), np.std([e[1] for e in eps[-last:]]), i)
+            for i, (name, (_, _, eps)) in enumerate(runs.items()) if eps]
+    rows.sort(key=lambda r: r[1])
+    ax.barh([r[0] for r in rows], [r[1] for r in rows], xerr=[r[2] for r in rows],
+            color=[_color(r[0], r[3], n) for r in rows], error_kw=dict(lw=0.8, capsize=2, alpha=0.6))
+    ax.set(title=f"Điểm TB {last} ván cuối", xlabel="Điểm Ms. Pacman")
     return ax
 
 
@@ -61,7 +103,7 @@ def plot_metric(runs, key, title=None, ax=None):
     ax = ax or plt.gca()
     for i, (name, (_, log, _)) in enumerate(runs.items()):
         if key in log:
-            ax.plot(log["step"], log[key], color=_color(name, i), label=name)
+            ax.plot(log["step"], log[key], color=_color(name, i, len(runs)), lw=_lw(len(runs)), label=name)
     ax.set(title=title or key, xlabel="Bước env")
     ax.legend()
     return ax
@@ -75,10 +117,10 @@ def plot_events(runs, total=None, bin_size=100_000, axes=None):
         if not log.get("step"):
             continue
         x, ev = events_per_bin(log, total, bin_size)
-        c = _color(name, i)
-        axes[0].plot(x, ev["pellets"], color=c, label=name)
-        axes[1].plot(x, ev["ghosts"], color=c, label=name)
-        axes[2].plot(x, ev["ghosts"] / np.maximum(ev["pellets"], 1), color=c, label=name)
+        c, lw = _color(name, i, len(runs)), _lw(len(runs))
+        axes[0].plot(x, ev["pellets"], color=c, lw=lw, label=name)
+        axes[1].plot(x, ev["ghosts"], color=c, lw=lw, label=name)
+        axes[2].plot(x, ev["ghosts"] / np.maximum(ev["pellets"], 1), color=c, lw=lw, label=name)
     k = f"{bin_size // 1000}k"
     axes[0].set(title=f"Viên năng lượng ăn được / {k} bước", xlabel="Bước env")
     axes[1].set(title=f"Ma ăn được / {k} bước", xlabel="Bước env")
@@ -100,17 +142,16 @@ def plot_training(runs, random_scores=None, save_path=None, show=True, bin_size=
         if not log.get("step"):
             continue
         x, ev = events_per_bin(log, bin_size=bin_size)
-        c = _color(name, i)
+        c, lw = _color(name, i, len(runs)), _lw(len(runs))
         if "deaths" in ev:
             for a, key in zip(ax[2:5], ("steps", "pellets", "ghosts")):
-                a.plot(x, per_life(ev, key), color=c, label=name)
-        ax[5].plot(x, ev["ghosts"] / np.maximum(ev["pellets"], 1), color=c, label=name)
+                a.plot(x, per_life(ev, key), color=c, lw=lw, label=name)
+        ax[5].plot(x, ev["ghosts"] / np.maximum(ev["pellets"], 1), color=c, lw=lw, label=name)
     for a, title in zip(ax[2:], ("Bước sống mỗi lượt (mỗi mạng)", "Viên năng lượng ăn được mỗi lượt",
                                  "Ma ăn được mỗi lượt", "Ma ăn được trên mỗi viên năng lượng")):
         a.set(title=title, xlabel="Bước env")
-        if a.get_legend_handles_labels()[0]:
-            a.legend()
-    fig.tight_layout()
+    bottom = shared_legend(fig, ax)
+    fig.tight_layout(rect=(0, bottom, 1, 1))
     if save_path:
         fig.savefig(save_path, dpi=150)
     if show:
@@ -118,17 +159,23 @@ def plot_training(runs, random_scores=None, save_path=None, show=True, bin_size=
     return fig
 
 
-def compare(names, directory="runs", random_scores=None, metrics=("ent",), algo=None, device="cpu",
+def compare(names=None, directory="runs", random_scores=None, metrics=("ent",), algo=None, device="cpu",
             save_path=None, show=True, bin_size=100_000):
-    """So sánh nhiều session: chỉ cần list tên (hoặc dict {tên: algo}). Nạp các run rồi vẽ plot_training,
+    """So sánh nhiều session: list tên (hoặc dict {tên: algo}); names=None thì lấy tất cả run trong `directory`. Nạp các run rồi vẽ plot_training,
     plot_events và từng chỉ số trong `metrics` (run không có chỉ số thì bỏ qua). Trả về dict tên -> TrainResult."""
     from .runs import load_runs
     runs = load_runs(directory, names, algo, device)
-    plot_training(runs, random_scores, save_path, show, bin_size)
-    plot_events(runs, bin_size=bin_size)
+    plot_training(runs, random_scores, save_path, False, bin_size)
+    fig, ax = plt.subplots(figsize=(7, 0.35 * len(runs) + 1.5))
+    plot_ranking(runs, ax=ax)
+    fig.tight_layout()
+    fig, axes = plt.subplots(1, 3, figsize=(17, 4.6))
+    plot_events(runs, bin_size=bin_size, axes=axes)
+    fig.tight_layout(rect=(0, shared_legend(fig, axes), 1, 1))
     for key in metrics:
-        plt.figure(figsize=(6, 4))
-        plot_metric(runs, key)
+        fig, ax = plt.subplots(figsize=(7, 4.6))
+        plot_metric(runs, key, ax=ax)
+        fig.tight_layout(rect=(0, shared_legend(fig, ax), 1, 1))
     if show:
         plt.show()
     return runs
