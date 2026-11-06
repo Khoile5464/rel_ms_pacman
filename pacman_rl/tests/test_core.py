@@ -46,3 +46,32 @@ def test_save_load_run_roundtrip(tmp_path):
     assert eps2 == [(100, 250.0), (200, 300.0)] and log2 == log
     for a, b in zip(model.state_dict().values(), m2.state_dict().values()):
         assert torch.equal(a, b)
+
+
+def test_vit_shapes_and_reload(tmp_path):
+    from pacman_rl.models import ActorCriticViT
+    from pacman_rl.runs import load_model
+    x = torch.randint(0, 256, (2, 12, 84, 84), dtype=torch.uint8)
+    m = ActorCriticViT(9, in_channels=12).eval()
+    dist, v = m(x)
+    assert dist.probs.shape == (2, 9) and v.shape == (2,) and m.in_channels == 12
+    torch.save(m.state_dict(), tmp_path / "vit.pt")
+    m2 = load_model(tmp_path / "vit.pt", "ppo")
+    assert torch.allclose(m2(x)[1], v, atol=1e-5)
+
+
+def test_lstm_shapes_and_reload(tmp_path):
+    from pacman_rl.models import ActorCritic_LSTM_CNN
+    from pacman_rl.runs import load_model
+    m = ActorCritic_LSTM_CNN(9, in_channels=4).eval()
+    x = torch.randint(0, 256, (5, 2, 4, 84, 84), dtype=torch.uint8)       # (T, E, C, H, W)
+    pd = torch.zeros(5, 2)
+    dist, v = m.forward_seq(x, m.initial_state(2, "cpu"), pd)
+    assert dist.probs.shape == (10, 9) and v.shape == (10,)
+    # forward_seq phải khớp từng bước step() (cùng state, cùng reset)
+    state, vs = m.initial_state(2, "cpu"), []
+    for t in range(5):
+        _, vt, state = m.step(x[t], state, pd[t]); vs.append(vt)
+    assert torch.allclose(torch.stack(vs).reshape(-1), v, atol=1e-4)
+    torch.save(m.state_dict(), tmp_path / "l.pt")
+    assert load_model(tmp_path / "l.pt", "ppo").hidden == 512

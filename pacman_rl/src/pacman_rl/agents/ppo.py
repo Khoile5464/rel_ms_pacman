@@ -11,7 +11,7 @@ import torch.optim as optim
 
 from ..envs import PipelinedEnvs, count_events, log_reward
 from ..evaluation import ppo_policy, watch
-from ..models import ActorCriticCNN
+from ..models import PPO_ARCHS
 from ..utils import get_device, set_seed
 from .common import TrainResult
 
@@ -42,6 +42,7 @@ class PPOConfig:
     # tuỳ chọn: hàm tiến độ (0 -> 1) -> (death_penalty, step_penalty), tính lại mỗi update.
     # None = dùng hai hằng số ở trên. Xem piecewise_penalty để dựng lịch trình tăng dần.
     penalty_schedule: Callable | None = None
+    arch: str = "cnn"                  # "cnn" (Nature DQN), "vit" (Vision Transformer nhỏ) hoặc "lstm" (CNN + LSTM)
     rgb_scale: bool = False             # True: đầu vào RGB (12 kênh), False: xám (4 kênh)
 
 
@@ -77,9 +78,10 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
     obs = torch.as_tensor(envs.reset(seed=cfg.seed), device=device)
     obs_shape = tuple(obs.shape[1:])
 
-    model = (model or ActorCriticCNN(envs.n_actions, in_channels=obs_shape[0])).to(device)
-    assert model.cnn[0].in_channels == obs_shape[0], \
-        f"model nhận {model.cnn[0].in_channels} kênh nhưng env (rgb_scale={cfg.rgb_scale}) trả {obs_shape[0]} kênh"
+    model = (model or PPO_ARCHS[cfg.arch](envs.n_actions, in_channels=obs_shape[0])).to(device)
+    assert model.in_channels == obs_shape[0], \
+        f"model nhận {model.in_channels} kênh nhưng env (rgb_scale={cfg.rgb_scale}) trả {obs_shape[0]} kênh"
+    rec = getattr(model, "recurrent", False)             # mạng có LSTM: truyền trạng thái ẩn, minibatch theo env
     optimizer = optim.Adam(model.parameters(), lr=cfg.lr, eps=1e-5)
 
     n_envs, n_steps = cfg.n_envs, cfg.n_steps
@@ -93,6 +95,10 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
     B_rew = torch.zeros((n_steps, n_envs), device=device)
     B_done = torch.zeros((n_steps, n_envs), device=device)
     B_val = torch.zeros((n_steps, n_envs), device=device)
+    if rec:
+        state = model.initial_state(n_envs, device)       # (h, c) hiện tại của từng env, giữ qua các rollout
+        prev_done = torch.zeros(n_envs, device=device)    # bước trước có kết thúc episode không (để reset state)
+        B_pd = torch.zeros((n_steps, n_envs), device=device)
 
     ep_log = []
     log = {"step": [], "ent": [], "kl": [], "clipfrac": [],
@@ -106,7 +112,12 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
 
     def launch(t, g):
         sl = envs.slices[g]
-        a, logp, value = model.act(obs[sl])
+        if rec:
+            B_pd[t, sl] = prev_done[sl]
+            a, logp, value, (h, c) = model.act(obs[sl], (state[0][sl], state[1][sl]), prev_done[sl])
+            state[0][sl], state[1][sl] = h, c
+        else:
+            a, logp, value = model.act(obs[sl])
         B_obs[t, sl], B_act[t, sl], B_logp[t,
                                            sl], B_val[t, sl] = obs[sl], a, logp, value
         envs.send(g, a.cpu().numpy())
@@ -118,6 +129,8 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
             death_pen, step_pen = (cfg.penalty_schedule(update / n_updates) if cfg.penalty_schedule
                                    else (cfg.death_penalty, cfg.step_penalty))
 
+            if rec:                                            # state đầu rollout, để tính lại chuỗi lúc update
+                h0, c0 = state[0].clone(), state[1].clone()
             # ---- Pha 1: thu thập rollout (2 nhóm env xen kẽ: GPU chọn action nhóm này khi CPU đang chạy nhóm kia) ----
             for g in range(envs.G):
                 launch(0, g)
@@ -137,13 +150,15 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
                         r, device=device)
                     B_done[t, sl] = torch.as_tensor(
                         done, dtype=torch.float32, device=device)
+                    if rec:
+                        prev_done[sl] = B_done[t, sl]
                     obs[sl] = torch.as_tensor(next_obs, device=device)
                     if t + 1 < n_steps:
                         launch(t + 1, g)
 
             # ---- Pha 2: GAE ----
             with torch.no_grad():
-                last_value = model(obs)[1]
+                last_value = model.step(obs, state, prev_done)[1] if rec else model(obs)[1]
             adv = torch.zeros_like(B_rew)
             gae = torch.zeros(n_envs, device=device)
             for t in reversed(range(n_steps)):
@@ -158,19 +173,32 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
             f_obs = B_obs.reshape(batch, *obs_shape)
             f_act, f_logp = B_act.reshape(-1), B_logp.reshape(-1)
             f_adv, f_ret = adv.reshape(-1), returns.reshape(-1)
+            def minibatches():
+                """Sinh (dist, value, act, logp_cũ, adv, ret). Mạng thường: xáo trộn mẫu. Mạng LSTM: chia theo env, giữ nguyên chuỗi thời gian."""
+                if not rec:
+                    perm = torch.randperm(batch, device=device)
+                    for i in range(0, batch, mb_size):
+                        idx = perm[i:i + mb_size]
+                        dist, value = model(f_obs[idx])
+                        yield dist, value, f_act[idx], f_logp[idx], f_adv[idx], f_ret[idx]
+                else:
+                    per = max(n_envs // cfg.n_minibatches, 1)
+                    perm = torch.randperm(n_envs, device=device)
+                    for i in range(0, n_envs, per):
+                        e = perm[i:i + per]
+                        dist, value = model.forward_seq(B_obs[:, e], (h0[e], c0[e]), B_pd[:, e])
+                        yield (dist, value, B_act[:, e].reshape(-1), B_logp[:, e].reshape(-1),
+                               adv[:, e].reshape(-1), returns[:, e].reshape(-1))
+
             for _ in range(cfg.epochs):
-                perm = torch.randperm(batch, device=device)
-                for i in range(0, batch, mb_size):
-                    idx = perm[i:i + mb_size]
-                    dist, value = model(f_obs[idx])
-                    logp = dist.log_prob(f_act[idx])
-                    ratio = torch.exp(logp - f_logp[idx])
-                    a = f_adv[idx]
+                for dist, value, m_act, m_logp, a, m_ret in minibatches():
+                    logp = dist.log_prob(m_act)
+                    ratio = torch.exp(logp - m_logp)
                     a = (a - a.mean()) / (a.std() + 1e-8)
 
                     pg_loss = -torch.min(ratio * a, torch.clamp(ratio,
                                          1 - cfg.clip_eps, 1 + cfg.clip_eps) * a).mean()
-                    v_loss = ((value - f_ret[idx]) ** 2).mean()
+                    v_loss = ((value - m_ret) ** 2).mean()
                     entropy = dist.entropy().mean()
                     loss = pg_loss + cfg.c1 * v_loss - cfg.c2 * entropy
 
@@ -180,7 +208,7 @@ def train_ppo(cfg=None, *, model=None, save_path=None, device=None, render=False
                     optimizer.step()
 
             with torch.no_grad():                              # chỉ số của minibatch cuối, đủ để theo dõi xu hướng
-                kl = (f_logp[idx] - logp).mean().item()
+                kl = (m_logp - logp).mean().item()
                 cf = ((ratio - 1).abs() > cfg.clip_eps).float().mean().item()
             for k, v in zip(log, [global_step, entropy.item(), kl, cf, v_loss.item(), pg_loss.item(), n_pellet, n_ghost, n_death, death_pen, step_pen]):
                 log[k].append(v)

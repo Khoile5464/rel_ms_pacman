@@ -66,8 +66,20 @@ def save_run(result, directory, name, append=True):
 def load_model(path, algo, device="cpu", n_actions=N_ACTIONS):
     """Nạp riêng model (algo = "ppo" hoặc "dqn"), để ở chế độ eval."""
     state = torch.load(path, map_location=device)
-    in_channels = state["cnn.0.weight"].shape[1]       # 4 (xám) hoặc 12 (RGB), đọc thẳng từ checkpoint
-    model = MODEL_CLASSES[algo](n_actions, in_channels=in_channels).to(device)
+    if "patch_embed.weight" in state:                  # checkpoint ViT
+        from .models import ActorCriticViT
+        w = state["patch_embed.weight"]                # (dim, in_channels, patch, patch)
+        depth = len({k.split(".")[2] for k in state if k.startswith("encoder.layers.")})
+        dim = w.shape[0]
+        model = ActorCriticViT(n_actions, in_channels=w.shape[1], patch=w.shape[2], dim=dim, depth=depth,
+                               heads=4, mlp_ratio=state["encoder.layers.0.linear1.weight"].shape[0] // dim).to(device)
+    elif "lstm.weight_ih_l0" in state:                 # checkpoint CNN + LSTM
+        from .models import ActorCritic_LSTM_CNN
+        model = ActorCritic_LSTM_CNN(n_actions, in_channels=state["cnn.0.weight"].shape[1],
+                                     hidden=state["lstm.weight_hh_l0"].shape[1]).to(device)
+    else:
+        in_channels = state["cnn.0.weight"].shape[1]   # 4 (xám) hoặc 12 (RGB), đọc thẳng từ checkpoint
+        model = MODEL_CLASSES[algo](n_actions, in_channels=in_channels).to(device)
     model.load_state_dict(state)
     return model.eval()
 

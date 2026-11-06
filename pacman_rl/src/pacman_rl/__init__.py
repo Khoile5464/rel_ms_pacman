@@ -15,7 +15,7 @@ _EXPORTS = {
     "envs": ["ENV_ID", "N_ACTIONS", "make_env", "PipelinedEnvs", "EpisodicLife", "log_reward", "count_events"],
     "models": ["ActorCriticCNN", "QNetwork"],
     "agents": ["PPOConfig", "piecewise_penalty", "train_ppo", "DQNConfig", "train_dqn", "TrainResult"],
-    "evaluation": ["evaluate", "watch", "run_episodes", "random_baseline", "ppo_policy", "dqn_policy"],
+    "evaluation": ["evaluate", "watch", "watch_probs", "run_episodes", "random_baseline", "ppo_policy", "dqn_policy", "watch_probs"],
     "runs": ["save_run", "load_run", "load_runs", "load_model"],
     "utils": ["get_device", "describe_device", "set_seed", "moving_avg"],
 }
