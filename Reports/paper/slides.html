@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pixels to Power Pellets – slides</title>
+<style>
+:root{--bg:#0d1030;--panel:#171b4a;--ink:#f3f4ff;--mute:#a8aed8;--y:#ffd23f;--r:#ff5a5f;--b:#4cc9f0;--g:#7bd88f}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:#05061a;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;color:var(--ink)}
+#stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform-origin:center;background:var(--bg)}
+.slide{position:absolute;inset:0;padding:54px 72px;display:none;flex-direction:column}
+.slide.on{display:flex;animation:in .35s ease}
+@keyframes in{from{opacity:0;transform:translateY(10px)}to{opacity:1}}
+h1{font-size:60px;line-height:1.08;letter-spacing:-.5px}
+h2{font-size:38px;margin-bottom:6px;letter-spacing:-.3px}
+h2 em{font-style:normal;color:var(--y)}
+.kick{color:var(--y);font-weight:700;letter-spacing:2px;font-size:15px;text-transform:uppercase;margin-bottom:8px}
+.sub{color:var(--mute);font-size:21px;margin-bottom:18px}
+p,li{font-size:24px;line-height:1.38}
+ul{padding-left:26px} li{margin:7px 0}
+li::marker{color:var(--y)}
+.row{display:flex;gap:28px;flex:1;min-height:0;align-items:center}
+.col{flex:1;min-width:0}
+.card{background:var(--panel);border-radius:16px;padding:20px 24px}
+.card h3{font-size:24px;margin-bottom:6px;color:var(--y)}
+.card p,.card li{font-size:20px}
+.cards{display:grid;gap:20px;flex:1;align-content:center}
+.c3{grid-template-columns:repeat(3,1fr)} .c4{grid-template-columns:repeat(4,1fr)} .c2{grid-template-columns:repeat(2,1fr)}
+.fig{background:#fff;border-radius:14px;padding:10px;display:flex;align-items:center;justify-content:center}
+.fig img{max-width:100%;max-height:100%;display:block}
+.cap{font-size:16px;color:var(--mute);margin-top:8px}
+.big{font-size:84px;font-weight:800;color:var(--y);line-height:1}
+.stat{background:var(--panel);border-radius:16px;padding:20px 24px;text-align:center}
+.stat small{display:block;color:var(--mute);font-size:17px;margin-top:6px}
+table{border-collapse:collapse;width:100%;font-size:22px}
+th,td{padding:10px 14px;text-align:center;border-bottom:1px solid #2c3270}
+th{color:var(--mute);font-weight:600;font-size:18px}
+td:first-child,th:first-child{text-align:left}
+tr.hl td{color:var(--y);font-weight:700}
+.bad{color:var(--r);font-weight:700}.good{color:var(--g);font-weight:700}
+.eq{background:#0a0d28;border:1px solid #2c3270;border-radius:12px;padding:16px 22px;font-family:Consolas,monospace;font-size:24px;color:var(--b);margin:12px 0}
+.pill{display:inline-block;background:#262b6b;border-radius:99px;padding:3px 14px;font-size:17px;color:var(--ink);margin-right:8px}
+.foot{position:absolute;left:72px;right:72px;bottom:20px;display:flex;justify-content:space-between;font-size:14px;color:#6c73b5}
+.bar{position:fixed;left:0;top:0;height:4px;background:var(--y);width:0;z-index:5;transition:width .25s}
+.hint{position:fixed;right:14px;bottom:10px;font-size:12px;color:#6c73b5;z-index:5}
+.dots{display:flex;gap:8px;margin-top:6px}
+.pac{width:54px;height:54px;border-radius:50%;background:conic-gradient(from 40deg,var(--y) 0 280deg,transparent 280deg);display:inline-block}
+.tag{color:var(--r)}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div id="stage">
+
+<!-- 1 -->
+<section class="slide on" style="justify-content:center">
+  <div style="display:flex;align-items:center;gap:30px;margin-bottom:22px"><span class="pac"></span><span style="color:var(--r);font-size:46px">● ● ●</span></div>
+  <h1>Pixels to Power Pellets</h1>
+  <p style="color:var(--y);font-size:20px;margin-top:10px">CS224N final project · custom</p>
+  <p class="sub" style="font-size:28px;margin-top:14px">Reward shaping, input modality and architecture<br>in pixel-based PPO for Ms. Pac-Man</p>
+  <p style="color:var(--mute);font-size:20px;margin-top:40px">Le Minh Khoi (SE192396) · Pham Quang Huy (SE184775) · Ngo Quang Huy (SE190631)<br><span style="font-size:18px">Mentor: NamLG &nbsp;|&nbsp; github.com/Khoile5464/rel_ms_pacman</span></p>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <h2>A PPO agent that learns fast… then <em>stalls</em></h2>
+  <div class="row">
+    <div class="col">
+      <ul>
+        <li>Standard CNN + PPO from raw pixels</li>
+        <li>Score jumps in the first ~25k steps, then flat near <b>700</b></li>
+        <li>Doubling training (1M → 2M steps) changes nothing</li>
+        <li>Watching it play: idles or repeats a pattern, and <b>doesn't hunt ghosts</b> after a power pellet</li>
+      </ul>
+      <p style="margin-top:16px;color:var(--mute)">Question: <b style="color:var(--ink)">why, and what moves it past the plateau?</b></p>
+    </div>
+    <div class="col" style="display:grid;gap:16px">
+      <div class="stat"><div class="big">274</div><small>random policy (≈200–280)</small></div>
+      <div class="stat"><div class="big">~700</div><small>baseline PPO plateau</small></div>
+      <div class="stat"><div class="big" style="color:var(--g)">1125</div><small>our best agent (ViT, 13M steps)</small></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <h2>What the agent sees and does</h2>
+  <div class="row">
+    <div class="fig" style="height:470px"><img src="figures/frame_early_rgb.png" alt="Ms. Pac-Man frame"></div>
+    <div class="col">
+      <ul>
+        <li><b>ALE/MsPacman-v5</b>, 9 discrete actions, frame-skip 4, no sticky actions</li>
+        <li>Input: last <b>4 frames</b>, 84×84 → <code>(4,84,84)</code> gray or <code>(12,84,84)</code> RGB</li>
+        <li>Dots 10 · power pellet 50 · ghosts 200/400/800/1600</li>
+        <li>Training: losing a life ends the episode; scoring: full 3-life game</li>
+      </ul>
+      <p class="cap">Big rewards need a <i>sequence</i>: eat pellet → notice blue ghosts → chase before it ends.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <h2>Three hypotheses, three cheap experiments</h2>
+  <div class="cards c3">
+    <div class="card"><h3>H1 · Idling is free</h3><p>Dying is cheap, waiting costs nothing.</p><p style="margin-top:10px"><span class="pill">death penalty dp</span><span class="pill">step penalty sp</span></p></div>
+    <div class="card"><h3>H2 · Colour is lost</h3><p>Gray frames hide the blue of frightened ghosts.</p><p style="margin-top:10px"><span class="pill">RGB input</span><span class="pill">gray→RGB init</span></p></div>
+    <div class="card"><h3>H3 · No memory</h3><p>A short frame stack can't remember “I just ate a pellet”.</p><p style="margin-top:10px"><span class="pill">CNN+LSTM</span><span class="pill">ViT</span></p></div>
+  </div>
+  <p class="cap" style="text-align:center">PPO, LSTM and ViT policies written from scratch in PyTorch (<code>pacman_rl</code>); emulator from Gymnasium/ALE.</p>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <h2>Shaped reward + PPO</h2>
+  <div class="eq">r̃ = ln(1 + r/10) − dp·[life lost] − sp</div>
+  <div class="row">
+    <div class="col">
+      <ul>
+        <li>Log scale: dot 0.69 · pellet 1.79 · ghosts 3.0–5.1</li>
+        <li><b>dp</b>: penalty on losing a life</li>
+        <li><b>sp</b>: constant cost per step</li>
+        <li>Not potential-based → can change the optimum</li>
+      </ul>
+    </div>
+    <div class="card col">
+      <h3>PPO settings</h3>
+      <p>32 envs × 512 steps / update<br>γ 0.99 · λ 0.95 · clip ε 0.1<br>4 epochs, 4 minibatches<br>c₁ 0.5 · c₂ 0.01 · Adam, linear LR decay<br>1× RTX 3070 Ti laptop</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <h2>Four policies, same actor–critic heads</h2>
+  <div class="cards c4">
+    <div class="card"><h3>CNN</h3><p>Nature-DQN trunk: 3 conv + FC-512. The baseline.</p></div>
+    <div class="card"><h3>CNN+LSTM</h3><p>Same trunk + LSTM (512). State reset on life loss; minibatches split by env to keep sequences.</p></div>
+    <div class="card"><h3>ViT</h3><p>12×12 patches → 49 tokens + CLS; width 128, depth 4, 4 heads, pre-norm.</p></div>
+    <div class="card"><h3>Gray → RGB <small style="color:var(--y)">ours</small></h3><p>Expand conv-1 from 4 to 12 channels with gray weight × (0.299, 0.587, 0.114). Output starts ≈ gray model.</p></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <h2>Does gray really hide the frightened ghosts?</h2>
+  <div class="row">
+    <div class="col"><div class="fig"><img src="figures/frame_fright_rgb.png" alt="RGB" style="max-height:400px"></div><p class="cap" style="text-align:center">RGB · 116 blue ghost pixels</p></div>
+    <div class="col"><div class="fig"><img src="figures/frame_fright_gray.png" alt="gray" style="max-height:400px"></div><p class="cap" style="text-align:center">Gray · ghost luminance 109 = a common maze gray (109)</p></div>
+  </div>
+  <p style="font-size:21px;margin-top:6px">Plausible loss of information… <b class="tag">but RGB did not improve the score</b> (both CNNs: 0.59 ghosts/game).</p>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <h2>A huge penalty from the start <span class="bad">hurts</span></h2>
+  <table>
+    <tr><th>Schedule (gray CNN, 1M steps)</th><th>Seed 0</th><th>Seed 1</th><th>Mean</th><th>Final entropy</th></tr>
+    <tr><td>const-low (dp 2.5 / sp 0)</td><td>703</td><td>598</td><td class="good">651</td><td>1.74 / 1.79</td></tr>
+    <tr><td>const-high (dp 20 / sp 0.1)</td><td>464</td><td>533</td><td class="bad">499</td><td>2.03 / 1.93</td></tr>
+    <tr><td>curriculum (2.5 → 20)</td><td>624</td><td>690</td><td class="good">657</td><td>1.67 / 1.65</td></tr>
+  </table>
+  <ul style="margin-top:22px">
+    <li>const-high is ~150 points worse and learns slower (higher entropy)</li>
+    <li>curriculum = const-low within seed noise (70–105) → penalty alone doesn't fix idling</li>
+  </ul>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <h2>RGB ≈ gray; architectures close at 1M</h2>
+  <div class="row">
+    <div class="fig" style="flex:1.6;height:400px"><img src="figures/fig_first1M.png" alt="first 1M"></div>
+    <div class="col">
+      <table style="font-size:20px"><tr><th>Model</th><th>Score ± s.e.</th></tr>
+      <tr><td>CNN gray</td><td>653 ± 23</td></tr><tr><td>CNN RGB</td><td>665 ± 26</td></tr><tr><td>CNN+LSTM</td><td>723 ± 24</td></tr><tr><td>ViT</td><td>583 ± 22</td></tr></table>
+      <p class="cap">One seed each. Gaps ≲ 2 s.e. are not decisive.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <h2>Past the plateau: <em>ViT reaches 1125</em></h2>
+  <div class="row">
+    <div class="fig" style="flex:1.7;height:410px"><img src="figures/fig_learning_curves.png" alt="learning curves"></div>
+    <div class="col">
+      <table style="font-size:19px">
+        <tr><th>Last 300 games</th><th>Mean</th><th>Best</th></tr>
+        <tr><td>CNN gray (1M)</td><td>652</td><td>2260</td></tr>
+        <tr><td>CNN RGB (1M)</td><td>640</td><td>2460</td></tr>
+        <tr><td>CNN+LSTM (13M)</td><td>900</td><td>4600</td></tr>
+        <tr class="hl"><td>ViT (13M)</td><td>1125</td><td>4720</td></tr>
+      </table>
+      <p class="cap">Stages: 2+1+5+5M, sp 0.05, lower LR. Not the same conditions as the 1M CNNs.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide">
+  <h2>The gain is <em>more ghosts</em>, not just survival</h2>
+  <div class="row">
+    <div class="fig" style="flex:1.5;height:430px"><img src="figures/fig_behaviour.png" alt="behaviour"></div>
+    <div class="col">
+      <div class="stat" style="margin-bottom:14px"><div class="big" style="font-size:56px">0.6 → 1.06</div><small>ghosts / game (ViT, last 1M)</small></div>
+      <ul><li>Pellets/game 1.0 → 1.58</li><li>LSTM stays at 0.60 ghosts</li><li>ViT survives ~10% longer</li></ul>
+    </div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide">
+  <h2>Too much penalty → <span class="bad">collapse</span></h2>
+  <div class="row">
+    <div class="fig" style="flex:1.3;height:330px"><img src="figures/fig_vit_collapse.png" alt="collapse"></div>
+    <div class="col">
+      <table style="font-size:18px">
+        <tr><th>sp</th><th>Value loss</th><th>Outcome</th></tr>
+        <tr><td>0.05</td><td>1.3 → 1.7</td><td class="good">learns</td></tr>
+        <tr><td>0.3</td><td>3.5 → 2.8</td><td>ok (RGB)</td></tr>
+        <tr><td>0.5</td><td>15</td><td class="bad">stopped</td></tr>
+        <tr><td>2</td><td>394 → 283</td><td class="bad">collapse</td></tr>
+      </table>
+    </div>
+  </div>
+  <ul style="margin-top:14px"><li style="font-size:21px">ViT with dp 5 / sp 0.3→1→0.5: score <b>1140 → 490</b>, eval 1092 → 434</li>
+  <li style="font-size:21px">Hypothesis: if dp &lt; expected future step cost (≈ sp × 200), dying early pays. <b>Value-loss ×10 is an early warning.</b></li></ul>
+</section>
+
+<!-- 13 -->
+<section class="slide">
+  <h2>Evaluation is <em>noisy</em></h2>
+  <div class="cards c3">
+    <div class="stat"><div class="big">828 vs 608</div><small>same gray model, two 20-game evaluations</small></div>
+    <div class="stat"><div class="big">748 · 660 · 499</div><small>same ViT checkpoint, same seeds, three evaluations</small></div>
+    <div class="stat"><div class="big">±50–100</div><small>standard error of a 20-game mean → gaps &lt; ~150 not interpretable</small></div>
+  </div>
+  <p class="cap" style="font-size:19px;text-align:center">So: lean on thousands of training games, call 1-seed results “trends”, and treat “ViT &gt; LSTM” as a hypothesis (different LR, stages, seeds).</p>
+</section>
+
+<!-- 14 -->
+<section class="slide">
+  <h2>What we learned</h2>
+  <div class="row" style="align-items:flex-start">
+    <div class="col">
+      <h3 style="color:var(--g);font-size:24px;margin-bottom:6px">Solid</h3>
+      <ul><li>Long low-LR fine-tuning + small sp → ViT <b>1125</b> (best 4720), ~2× ghosts</li>
+      <li>Large penalties hurt; sp ≥ 0.3 (ViT) / 2 (CNN) collapses</li>
+      <li>RGB and dp-curriculum gave no measurable gain</li></ul>
+    </div>
+    <div class="col">
+      <h3 style="color:var(--r);font-size:24px;margin-bottom:6px">Limits & next</h3>
+      <ul><li>Mostly 1 seed; confounded stages; 20-game eval</li>
+      <li>≥3 seeds, ≥50 eval games, same LR/budget for ViT vs LSTM</li>
+      <li>Rerun 13M without sp; exploration bonus (RND); probe frightened-ghost behaviour</li></ul>
+    </div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide">
+  <h2>Risks we saw</h2>
+  <div class="cards c3">
+    <div class="card"><h3>Reward misspecification</h3><p>A “fix” for idling made quitting optimal. Mitigate: log intended-behaviour metrics, short pilots, human review of reward changes.</p></div>
+    <div class="card"><h3>Compute & evidence</h3><p>23 runs, ~84M steps. Mitigate: report seeds & noise, share logs, multi-seed pilots first.</p></div>
+    <div class="card"><h3>Game automation</h3><p>Pixel-only agents can become bots. Mitigate: share emulator training code only, state intended scope.</p></div>
+  </div>
+</section>
+
+<div class="foot"><span>Pixels to Power Pellets · CS224N</span><span id="num"></span></div>
+</div>
+<div class="hint">← → / space · F fullscreen</div>
+<script>
+const S=[...document.querySelectorAll('.slide')],st=document.getElementById('stage');let i=0;
+function fit(){const k=Math.min(innerWidth/1280,innerHeight/720);st.style.transform=`translate(-50%,-50%) scale(${k})`}
+function go(n){i=Math.max(0,Math.min(S.length-1,n));S.forEach((s,j)=>s.classList.toggle('on',j===i));
+ document.getElementById('bar').style.width=(i/(S.length-1)*100)+'%';document.getElementById('num').textContent=(i+1)+' / '+S.length;
+ document.querySelector('.foot').style.display=i==0?'none':'flex';try{location.hash=i+1}catch(e){}}
+addEventListener('resize',fit);fit();
+addEventListener('keydown',e=>{if(['ArrowRight','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();go(i+1)}
+ else if(['ArrowLeft','PageUp','Backspace'].includes(e.key))go(i-1);else if(e.key=='Home')go(0);else if(e.key=='End')go(S.length-1);
+ else if(e.key=='f')document.documentElement.requestFullscreen?.()});
+st.addEventListener('click',e=>{go(e.clientX>innerWidth/2?i+1:i-1)});
+go((parseInt(location.hash.slice(1))||1)-1);
+</script>
+</body>
+</html>
